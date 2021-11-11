@@ -1,0 +1,7 @@
+{
+    "python.pythonPath": "env/bin/python3.8",
+    "python.linting.pylintArgs": [
+        "--errors-only",
+        "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"
+        ]
+}
