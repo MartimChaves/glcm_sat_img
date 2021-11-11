@@ -29,14 +29,11 @@ glcm = np.zeros([256,256])
 if verbose: print("Calculating GLCM")
 for i in range(finl_img.shape[0]): # row
     for j in range(finl_img.shape[1]): # col
-        
         init_val = finl_img[i,j]
-        
         try:
             target = finl_img[i+pos_op[0],j+pos_op[1]]
         except:
             continue # out of img bounds
-        
         glcm[init_val,target]+=1
         
 glcm = glcm/np.sum(glcm)
