@@ -7,8 +7,8 @@ verbose = True
 # mount everest: https://artsandculture.google.com/story/kAWhL0aq-oU_-Q
 # sea: https://www.istockphoto.com/pt/foto/blue-sea-water-background-atlantic-gm1136870172-302935743
 if verbose: print("Loading images...")
-mnt_ev = plt.imread("mounteverest.jpg")
-sea = plt.imread("sea.jpg")
+mnt_ev = plt.imread("imgs/mounteverest.jpg")
+sea = plt.imread("imgs/sea.jpg")
 if verbose: print("Images loaded")
 
 # get img grey lvl
