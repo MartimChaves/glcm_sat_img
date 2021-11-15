@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
+import copy
 
 verbose = True
 
@@ -42,5 +43,19 @@ if verbose: print("Plotting image")
 imgplot = plt.imshow(np.log(glcm+1e-6))
 plt.show()
 
+is_symmetric = False
+if is_symmetric:
+    test_glcm = np.copy(glcm)
+    for i in range(test_glcm.shape[0]):
+        for j in range(test_glcm.shape[1]):
+            if i < j:
+                continue
+            else:
+                temp_val = test_glcm[i,j].copy()
+                test_glcm[i,j]-= test_glcm[j,i]
+                test_glcm[j,i] -= temp_val
 
-
+    if verbose: print("Is the GLCM symmetric?")
+    imgplot = plt.imshow(test_glcm)
+    plt.show()
+    print("Number of different values in diagonally subtracted glcm:",len(np.unique(test_glcm,return_counts=True)[1]))
