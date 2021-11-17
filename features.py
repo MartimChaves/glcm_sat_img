@@ -1,9 +1,12 @@
 # imports
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 import argparse
 import os
+import copy
+from tqdm import tqdm
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -17,12 +20,17 @@ def parse_args():
     # EDA
     parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
     parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
-    parser.add_argument('--eda_rdm_img_num', type=int, default=6, help='Number of random images to show.')
+    parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
     args = parser.parse_args()
     return args
 
-class Img_Features():
+class DS_aux():
+    """
+    Dataset-auxilliary class:
+    Contains EDA and Dataset split
+    """
+    
     
     def __init__(self,args):
         
@@ -42,11 +50,11 @@ class Img_Features():
         # get split fractions
         trainset_fraction = int(self.args.dataset_split.split(",")[0])/100.
         valset_fraction = int(self.args.dataset_split.split(",")[1])/100.
-        testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
+        #testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
         
         trainset_len = int(len(img_files)*trainset_fraction)
         valset_len = int(len(img_files)*valset_fraction)
-        testset_len = len(img_files) - trainset_len - valset_len
+        testset_len = len(img_files) - trainset_len - valset_len # prevent rounding errors
         
         self.testset_files = img_files[-testset_len::]
         img_files = img_files[0:-testset_len]
@@ -54,50 +62,57 @@ class Img_Features():
         # cross-validation
         k_num = int((trainset_fraction+valset_fraction)/valset_fraction)
         
-        self.folds = []
+        self.folds = {}
         for i in range(k_num):
             val_files = img_files[i*valset_len:(i+1)*valset_len]
             train_files = [file for file in img_files if file not in val_files]
-
-            self.folds.append([train_files,val_files])
+            self.folds["fold_"+str(i+1)] = {'train':train_files,'val':val_files}
             
         return
     
     ### exploratory data analysis
     def show_rdm_imgs(self):
+
+        num_imgs = self.args.eda_rdm_img_num
+        
+        train_imgs = np.random.choice(self.folds['fold_1']['train'],num_imgs,replace=False)
+        val_imgs = np.random.choice(self.folds['fold_1']['val'],num_imgs,replace=False)
+        test_imgs = np.random.choice(self.testset_files,num_imgs,replace=False)
+        
+        train_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in train_imgs]
+        val_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in val_imgs]
+        test_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in test_imgs]
+        
+        plt.figure(figsize = (8,6))
+        
+        for i in range(1,(num_imgs*3)+1):
+            if i <= num_imgs:
+                img = plt.imread(train_imgs_file[i-1])
+                plt.subplot(3,num_imgs,i)
+                plt.imshow(img)
+                plt.title("Train image " + str(i))
+            elif i>num_imgs and i <= num_imgs*2:
+                j = i-num_imgs
+                img = plt.imread(val_imgs_file[j-1])
+                plt.subplot(3,num_imgs,i)
+                plt.imshow(img)
+                plt.title("Val image " + str(j))
+            elif i > num_imgs*2:
+                k = i-num_imgs*2
+                img = plt.imread(test_imgs_file[k-1])
+                plt.subplot(3,num_imgs,i)
+                plt.imshow(img)
+                plt.title("Test image " + str(k))
+        
+        plt.show()
+        
         return
 
     def eda(self):
-        data_root = self.args.root
 
         # random images
         if self.args.eda_rdm_img == "True":
-            train_imgs_files = os.listdir(self.train_imgs_dir)
-            test_imgs_files = os.listdir(self.test_imgs_dir)
-
-            num_imgs = self.args.eda_rdm_img_num
-            
-            train_imgs = np.random.choice(train_imgs_files,num_imgs//2,replace=False)
-            test_imgs = np.random.choice(test_imgs_files,num_imgs//2,replace=False)
-            
-            plt.figure(figsize = (8,6))
-            
-            for i in range(1,num_imgs+1):
-                if i <= num_imgs//2:
-                    img_file = os.path.join(self.args.root,"train_images",train_imgs[i-1])
-                    img = plt.imread(img_file)
-                    plt.subplot(2,num_imgs//2,i)
-                    plt.imshow(img)
-                    plt.title("Train image " + str(i))
-                else:
-                    j = i-num_imgs//2
-                    img_file = os.path.join(self.args.root,"test_images",test_imgs[j-1])
-                    img = plt.imread(img_file)
-                    plt.subplot(2,num_imgs//2,i)
-                    plt.imshow(img)
-                    plt.title("Test image " + str(j))
-            
-            plt.show()
+            self.show_rdm_imgs()
             
         # average image for each class
         # ravel image into vector
@@ -113,24 +128,34 @@ class Img_Features():
         # Max value, min value, mean, std for each class
         # correlation for each class and in general
 
-
         return
-
-### train val test split
 
 ### feature development
 
 ### feature selection
+
+### Dataset class
+class Dataset(torch.utils.data.Dataset):
+    
+    def __init__(self):
+        
+        return
+    
+    def __len__(self):
+        return 0
+    
+    def __getitem__(self,idx):
+        return idx
 
 
 def main(args):
     
     np.random.seed(args.seed)
     
-    Features = Img_Features(args)
+    dataset_info = DS_aux(args)
     
     if args.eda == "True":
-        Features.eda()
+        dataset_info.eda()
     
     return
 
