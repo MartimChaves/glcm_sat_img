@@ -1,6 +1,10 @@
 # imports
 import numpy as np
+import pandas as pd
+from sklearn.utils import shuffle
+from skmultilearn.model_selection.iterative_stratification import IterativeStratification
 import matplotlib.pyplot as plt
+
 import torch
 
 import argparse
@@ -32,25 +36,54 @@ class DS_aux():
     """
     
     
-    def __init__(self,args):
+    def __init__(self,args,
+                 label_code={'healthy':0,
+                             'scab':1,
+                             'frog_eye_leaf_spot':2,
+                             'complex':3,
+                             'rust':4,
+                             'powdery_mildew':5}
+                 ):
         
         self.args = args
         self.imgs_dir = os.path.join(self.args.root,"train_images")
+        self.labels_dir = os.path.join(self.args.root,"train.csv")
         #self.extra_imgs_dir = os.path.join(self.args.root,"test_images")
+        self.label_code = label_code
         
         self.data_split()
         
         return
 
+    def convert_label(self,lbl_raw):
+        onehot = [0 for _ in range(len(self.label_code.keys()))]
+        
+        if not type(lbl_raw)==str:
+            raise ValueError(F'Label not string, label type: {type(lbl_raw)}')
+        
+        if ' ' not in lbl_raw:
+            idx = self.label_code[lbl_raw]
+            onehot[idx] = 1
+        elif ' ' in lbl_raw:
+            split_lbl = lbl_raw.split(' ')
+            for single_lbl in split_lbl:
+                idx = self.label_code[single_lbl]
+                onehot[idx] = 1
+        else:
+            pass
+        
+        return onehot
+    
     def data_split(self):
         
+        print("Getting datafiles paths...")
         img_files = os.listdir(self.imgs_dir)
         np.random.shuffle(img_files)
         
         # get split fractions
         trainset_fraction = int(self.args.dataset_split.split(",")[0])/100.
         valset_fraction = int(self.args.dataset_split.split(",")[1])/100.
-        #testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
+        testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
         
         trainset_len = int(len(img_files)*trainset_fraction)
         valset_len = int(len(img_files)*valset_fraction)
@@ -60,14 +93,54 @@ class DS_aux():
         img_files = img_files[0:-testset_len]
         
         # cross-validation
-        k_num = int((trainset_fraction+valset_fraction)/valset_fraction)
-        
+        self.num_folds = int((trainset_fraction+valset_fraction)/valset_fraction)
         self.folds = {}
-        for i in range(k_num):
+        """
+        folds (type: dict)
+        ├───fold_1 (type: dict)
+        │   ├───train (type: list)
+        │   │   └───[train_img_id_1,train_img_id_2,...]
+        │   └───val (type: list)
+        │       └───[val_img_id_1,val_img_id_2,...]
+        ├───fold_2 (type: dict - same structure as fold_1)
+        ...
+        └───fold_n (last fold)
+        """
+        
+        print("Generating folds...")
+        """
+        for i in tqdm(range(self.num_folds)):
             val_files = img_files[i*valset_len:(i+1)*valset_len]
             train_files = [file for file in img_files if file not in val_files]
             self.folds["fold_"+str(i+1)] = {'train':train_files,'val':val_files}
+        labels_dict = {img:self.convert_label(lbl) \
+                       for img,lbl in zip(labels_df['image'],labels_df['labels'])}
+        """
+        labels_df = pd.read_csv(self.labels_dir)
+        imgs = np.array(labels_df['image'])
+        onehot_labels = np.array([self.convert_label(lbl) for lbl in labels_df['labels']])
+        imgs, onehot_labels = shuffle(imgs, onehot_labels, random_state=self.args.seed)
+        
+        ## order means the order-th label combinations (in this case it's 3? have to check)
+        stratifier_test = IterativeStratification(n_splits=2, order=2, sample_distribution_per_fold=[testset_fraction, 1-testset_fraction])
+        train_val_indexes, test_indexes = next(stratifier_test.split(imgs, onehot_labels))
+        self.imgs_test, self.labels_test = imgs[test_indexes], onehot_labels[test_indexes]
+        
+        imgs_train_val, oneh_train_val = imgs[train_val_indexes], onehot_labels[train_val_indexes]
+        valset_fraction = round(valset_fraction/(1-testset_fraction),2)
+        
+        # this doesn't work
+        # the val imgs of fold 2 may contain val imgs of fold 1 (since it's randomly selected)
+        for i in tqdm(range(self.num_folds)):
             
+            stratifier_val = IterativeStratification(n_splits=2, order=2, sample_distribution_per_fold=[valset_fraction, 1-valset_fraction])
+            train_indexes, val_indexes = next(stratifier_val.split(imgs_train_val, oneh_train_val))
+            
+            self.folds["fold_"+str(i+1)] = {'train':imgs_train_val[train_indexes],
+                                            'val':imgs_train_val[val_indexes],
+                                            'train_labels':oneh_train_val[train_indexes],
+                                            'val_labels':oneh_train_val[val_indexes]}
+        
         return
     
     ### exploratory data analysis
