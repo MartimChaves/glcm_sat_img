@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
+# stratified k-folds
 from skmultilearn.model_selection.iterative_stratification import IterativeStratification
 import matplotlib.pyplot as plt
 
@@ -23,7 +24,7 @@ def parse_args():
     
     # EDA
     parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
-    parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
+    parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
     args = parser.parse_args()
@@ -84,14 +85,7 @@ class DS_aux():
         trainset_fraction = int(self.args.dataset_split.split(",")[0])/100.
         valset_fraction = int(self.args.dataset_split.split(",")[1])/100.
         testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
-        
-        trainset_len = int(len(img_files)*trainset_fraction)
-        valset_len = int(len(img_files)*valset_fraction)
-        testset_len = len(img_files) - trainset_len - valset_len # prevent rounding errors
-        
-        self.testset_files = img_files[-testset_len::]
-        img_files = img_files[0:-testset_len]
-        
+                
         # cross-validation
         self.num_folds = int((trainset_fraction+valset_fraction)/valset_fraction)
         self.folds = {}
@@ -99,48 +93,52 @@ class DS_aux():
         folds (type: dict)
         ├───fold_1 (type: dict)
         │   ├───train (type: list)
-        │   │   └───[train_img_id_1,train_img_id_2,...]
+        │   │   └───[train_img_id_1,train_img_id_2,...] # img_id = 'a849dhfhg.jpg'
         │   └───val (type: list)
         │       └───[val_img_id_1,val_img_id_2,...]
         ├───fold_2 (type: dict - same structure as fold_1)
         ...
         └───fold_n (last fold)
         """
-        
-        print("Generating folds...")
-        """
-        for i in tqdm(range(self.num_folds)):
-            val_files = img_files[i*valset_len:(i+1)*valset_len]
-            train_files = [file for file in img_files if file not in val_files]
-            self.folds["fold_"+str(i+1)] = {'train':train_files,'val':val_files}
-        labels_dict = {img:self.convert_label(lbl) \
-                       for img,lbl in zip(labels_df['image'],labels_df['labels'])}
-        """
+        print("Generating folds...") # get data
         labels_df = pd.read_csv(self.labels_dir)
         imgs = np.array(labels_df['image'])
         onehot_labels = np.array([self.convert_label(lbl) for lbl in labels_df['labels']])
         imgs, onehot_labels = shuffle(imgs, onehot_labels, random_state=self.args.seed)
         
-        ## order means the order-th label combinations (in this case it's 3? have to check)
-        stratifier_test = IterativeStratification(n_splits=2, order=2, sample_distribution_per_fold=[testset_fraction, 1-testset_fraction])
+        ## order means the order-th label combinations (in this case it's 3- maximum number of concurrent labels is 3)
+        """
+        lens = []
+        for lbl in a:
+            if ' ' in lbl:
+                x = lbl.split(' ')
+                lens.append(len(x))
+        order = np.max(lens)
+        """
+        stratifier_test = IterativeStratification(n_splits=2, order=3, sample_distribution_per_fold=[testset_fraction, 1-testset_fraction])
         train_val_indexes, test_indexes = next(stratifier_test.split(imgs, onehot_labels))
         self.imgs_test, self.labels_test = imgs[test_indexes], onehot_labels[test_indexes]
         
         imgs_train_val, oneh_train_val = imgs[train_val_indexes], onehot_labels[train_val_indexes]
-        valset_fraction = round(valset_fraction/(1-testset_fraction),2)
+        valset_fraction = round(valset_fraction/(1-testset_fraction),2) # adapted after testset removal
         
-        # this doesn't work
-        # the val imgs of fold 2 may contain val imgs of fold 1 (since it's randomly selected)
+        # get stratifier
+        sample_distr = [valset_fraction for _ in range(self.num_folds)]
+        sample_distr.append(1-np.sum(sample_distr))
+        stratifier_val = IterativeStratification(n_splits=(self.num_folds+1), order=3, sample_distribution_per_fold=sample_distr)
+        
         for i in tqdm(range(self.num_folds)):
-            
-            stratifier_val = IterativeStratification(n_splits=2, order=2, sample_distribution_per_fold=[valset_fraction, 1-valset_fraction])
             train_indexes, val_indexes = next(stratifier_val.split(imgs_train_val, oneh_train_val))
-            
             self.folds["fold_"+str(i+1)] = {'train':imgs_train_val[train_indexes],
                                             'val':imgs_train_val[val_indexes],
                                             'train_labels':oneh_train_val[train_indexes],
                                             'val_labels':oneh_train_val[val_indexes]}
-        
+            
+        """ About 25% of intersection between validation sets of different folds (not great, not terrible)
+        intersect = np.intersect1d(self.folds["fold_1"]['val'],self.folds["fold_2"]['val']).shape[0]
+        fold_size = self.folds["fold_1"]['val'].shape[0]
+        print("Percentage of intersection between different folds val sets: ",round(intersect/fold_size*100,2)) 
+        """
         return
     
     ### exploratory data analysis
@@ -150,7 +148,7 @@ class DS_aux():
         
         train_imgs = np.random.choice(self.folds['fold_1']['train'],num_imgs,replace=False)
         val_imgs = np.random.choice(self.folds['fold_1']['val'],num_imgs,replace=False)
-        test_imgs = np.random.choice(self.testset_files,num_imgs,replace=False)
+        test_imgs = np.random.choice(self.imgs_test,num_imgs,replace=False)
         
         train_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in train_imgs]
         val_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in val_imgs]
@@ -210,25 +208,69 @@ class DS_aux():
 ### Dataset class
 class Dataset(torch.utils.data.Dataset):
     
-    def __init__(self):
+    def __init__(self,args,data,labels):
+        
+        self.args = args
+        self.data = data
+        self.labels = labels
+        
+        self.imgs_dir = os.path.join(self.args.root,"train_images")
         
         return
     
     def __len__(self):
-        return 0
+        return len(self.data)
     
     def __getitem__(self,idx):
-        return idx
+        
+        img_file = self.data[idx]
+        img_path = os.path.join(self.imgs_dir,img_file)
+        img = plt.imread(img_path)
+        
+        label = self.labels[idx]
+        
+        return img, label, idx
 
 
 def main(args):
     
     np.random.seed(args.seed)
     
+    #use cuda 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    torch.backends.cudnn.benchmark = True
+    
+    # dataset generator params
+    params = {'batch_size': 3,
+          'shuffle': True,
+          'num_workers': 2}
+    
     dataset_info = DS_aux(args)
     
     if args.eda == "True":
         dataset_info.eda()
+    
+    for i in range(1,dataset_info.num_folds+1):
+        # TO-DO: turn this into a function
+        train_imgs = dataset_info.folds["fold_"+str(i)]['train']
+        train_labels = dataset_info.folds["fold_"+str(i)]['train_labels']
+        train_set = Dataset(args,train_imgs,train_labels)
+        train_gen = torch.utils.data.DataLoader(train_set, **params)
+        
+        val_imgs = dataset_info.folds["fold_"+str(i)]['val']
+        val_labels = dataset_info.folds["fold_"+str(i)]['val_labels']
+        val_set = Dataset(args,val_imgs,val_labels)
+        val_gen = torch.utils.data.DataLoader(val_set, **params)
+        
+        # TO-DO: transform arrays to tensors and pass to GPU
+        for epoch in range(50):
+            print(f"Training - epoch: {epoch}")
+            for imgs, labels, idxs in tqdm(train_gen):
+                pass
+            
+            print(f"Validating - epoch: {epoch}")
+            for imgs, labels, idxs in tqdm(val_gen):
+                pass
     
     return
 
