@@ -7,11 +7,15 @@ from skmultilearn.model_selection.iterative_stratification import IterativeStrat
 import matplotlib.pyplot as plt
 
 import torch
+from torchvision import transforms
+from PIL import Image
 
 import argparse
 import os
 import copy
 from tqdm import tqdm
+
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -30,14 +34,13 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+# TO-DO: Create parent class that contains aug functions for EDA
 class DS_aux():
     """
     Dataset-auxilliary class:
     Contains EDA and Dataset split
     """
-    
-    
-    def __init__(self,args,
+    def __init__(self, args,
                  label_code={'healthy':0,
                              'scab':1,
                              'frog_eye_leaf_spot':2,
@@ -51,12 +54,13 @@ class DS_aux():
         self.labels_dir = os.path.join(self.args.root,"train.csv")
         #self.extra_imgs_dir = os.path.join(self.args.root,"test_images")
         self.label_code = label_code
+        self.num_classes = len(label_code.keys())
         
         self.data_split()
         
         return
 
-    def convert_label(self,lbl_raw):
+    def convert_label(self, lbl_raw):
         onehot = [0 for _ in range(len(self.label_code.keys()))]
         
         if not type(lbl_raw)==str:
@@ -126,7 +130,7 @@ class DS_aux():
         sample_distr = [valset_fraction for _ in range(self.num_folds)]
         sample_distr.append(1-np.sum(sample_distr))
         stratifier_val = IterativeStratification(n_splits=(self.num_folds+1), order=3, sample_distribution_per_fold=sample_distr)
-        
+        # generate folds
         for i in tqdm(range(self.num_folds)):
             train_indexes, val_indexes = next(stratifier_val.split(imgs_train_val, oneh_train_val))
             self.folds["fold_"+str(i+1)] = {'train':imgs_train_val[train_indexes],
@@ -179,6 +183,61 @@ class DS_aux():
         
         return
 
+    
+    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
+        # iterating through each file
+        flag = False
+        for fn in tqdm(list_of_filename):
+            fp = os.path.join(path,fn)
+            # read image (array)
+            img_ts = plt.imread(fp)
+            if img_ts.shape == size: #TO-DO: Improve this (add functionality)
+                # turn that into a vector / 1D array
+                img_ts = [img_ts.ravel()]
+                if flag:
+                    full_mat = np.concatenate((full_mat, img_ts))
+                else:
+                    full_mat = img_ts
+                    flag = True
+                """
+                try:
+                    # concatenate different images
+                    full_mat = np.concatenate((full_mat, img_ts))
+                except:# UnboundLocalError: 
+                    # if not assigned yet, assign one
+                    full_mat = img_ts"""
+            else:
+                continue
+                
+        return full_mat
+    
+    def calc_mean_img(self, full_mat, title, size = (2672, 4000, 3)):
+        # calculate the average
+        mean_img = np.mean(full_mat, axis = 0)
+        # reshape it back to a matrix
+        mean_img = mean_img.reshape(size)
+        plt.imshow(mean_img)
+        plt.title(f'Average {title}')
+        plt.axis('off')
+        plt.show()
+        return mean_img
+    
+    def mean_image(self):
+        
+        # temp code
+        labels = self.folds['fold_1']['train_labels']
+        healthy_indx = [idx for idx,lbl in enumerate(labels) if (lbl == np.array([1,0,0,0,0,0])).all()]
+        imgs = self.folds['fold_1']['train']
+        healthy_imgs = imgs[healthy_indx]
+        full_healthy = self.img2np(self.imgs_dir,healthy_imgs)
+        mean_healthy = self.calc_mean_img(full_healthy,'healthy')
+        
+        #
+        for lbl_clss in self.label_code:
+             indx = self.label_code[lbl_clss]
+        
+        return
+    
     def eda(self):
 
         # random images
@@ -208,7 +267,7 @@ class DS_aux():
 ### Dataset class
 class Dataset(torch.utils.data.Dataset):
     
-    def __init__(self,args,data,labels):
+    def __init__(self, args, data, labels):
         
         self.args = args
         self.data = data
@@ -226,6 +285,8 @@ class Dataset(torch.utils.data.Dataset):
         img_file = self.data[idx]
         img_path = os.path.join(self.imgs_dir,img_file)
         img = plt.imread(img_path)
+        img = Image.fromarray(img)
+        img = transforms.ToTensor()(img)
         
         label = self.labels[idx]
         
@@ -241,7 +302,7 @@ def main(args):
     torch.backends.cudnn.benchmark = True
     
     # dataset generator params
-    params = {'batch_size': 3,
+    params = {'batch_size': 1,
           'shuffle': True,
           'num_workers': 2}
     
@@ -249,6 +310,7 @@ def main(args):
     
     if args.eda == "True":
         dataset_info.eda()
+        dataset_info.mean_image()
     
     for i in range(1,dataset_info.num_folds+1):
         # TO-DO: turn this into a function
@@ -263,14 +325,14 @@ def main(args):
         val_gen = torch.utils.data.DataLoader(val_set, **params)
         
         # TO-DO: transform arrays to tensors and pass to GPU
-        for epoch in range(50):
+        for epoch in range(1):
             print(f"Training - epoch: {epoch}")
             for imgs, labels, idxs in tqdm(train_gen):
-                pass
+                imgs, labels = imgs.to(device), labels.to(device) 
             
             print(f"Validating - epoch: {epoch}")
             for imgs, labels, idxs in tqdm(val_gen):
-                pass
+                imgs, labels = imgs.to(device), labels.to(device) 
     
     return
 
