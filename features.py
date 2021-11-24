@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision import transforms
 from PIL import Image
+import cv2
 
 import argparse
 import os
@@ -16,6 +17,7 @@ import copy
 from tqdm import tqdm
 
 import time
+import math
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -31,7 +33,11 @@ def parse_args():
     parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
-    parser.add_argument('--mean_img_counter', type=int, default=100, help='Number of random images to show.')
+    parser.add_argument('--eda_mean_img', type=str, default='True', help='If true, show class mean image (EDA).')
+    parser.add_argument('--mean_img_counter', type=int, default=30, help='Number of imgs to use to calculate class mean.')
+    
+    parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--eigen_img_counter', type=int, default=30, help='Number of imgs to use for eigen faces.')
     
     args = parser.parse_args()
     return args
@@ -184,13 +190,12 @@ class DS_aux():
         plt.show()
         
         return
-
     
     def calc_mean_img(self, path, list_of_filename, size = (2672, 4000, 3)):
         # iterating through each file
         flag = False
         counter = 0
-        for idx, fn in tqdm(enumerate(list_of_filename)):
+        for idx, fn in enumerate(tqdm(list_of_filename)):
             fp = os.path.join(path,fn)
             # read image (array)
             img = plt.imread(fp)
@@ -207,38 +212,95 @@ class DS_aux():
                     counter += 1
             else:
                 continue
-            
             if idx > self.args.mean_img_counter:
                 break
+            
         full_mat = np.divide(full_mat,counter)
         mean_img = full_mat.reshape(size)
         mean_img = mean_img.astype(np.uint8)
         return mean_img
     
-    def class_mean_img(self, full_mat, title, size = (2672, 4000, 3)):
-        # calculate the average
-        mean_img = np.mean(full_mat, axis = 0)
-        # reshape it back to a matrix
-        mean_img = mean_img.reshape(size)
-        plt.imshow(mean_img)
-        plt.title(f'Average {title}')
-        plt.axis('off')
-        plt.show()
-        return mean_img
+    def get_class_imgs(self,indx,imgs,labels):
+        onehot_lbl = np.zeros(len(self.label_code.keys()))
+        onehot_lbl[indx] = 1
+        
+        imgs_indx = [idx for idx,lbl in enumerate(labels) if (lbl == onehot_lbl).all()]
+        class_imgs = imgs[imgs_indx]
+        
+        return class_imgs
+    
+    def class_mean_img(self, indx, imgs, labels):
+        
+        class_imgs = self.get_class_imgs(indx,imgs,labels)
+        class_mean_img = self.calc_mean_img(self.imgs_dir,class_imgs)
+        
+        return class_mean_img
     
     def mean_image(self):
         
-        # temp code
         labels = self.folds['fold_1']['train_labels']
         imgs = self.folds['fold_1']['train']
         
-        healthy_indx = [idx for idx,lbl in enumerate(labels) if (lbl == np.array([1,0,0,0,0,0])).all()]
-        healthy_imgs = imgs[healthy_indx]
-        mean_healthy = self.calc_mean_img(self.imgs_dir,healthy_imgs)
+        # calculate mean image for all classes
+        clss_mean_imgs = {}
+        for i, lbl_clss in enumerate(self.label_code):
+            indx = self.label_code[lbl_clss]
+            mean_img = self.class_mean_img(indx, imgs, labels)
+            
+            clss_mean_imgs[lbl_clss] = mean_img
+            
+            plt.subplot(2,math.ceil(self.num_classes/2),i+1)
+            plt.imshow(mean_img)
+            plt.title(f"Class: {lbl_clss}")
+            
+        plt.show()
         
-        #
-        for lbl_clss in self.label_code:
-             indx = self.label_code[lbl_clss]
+        counter_img = 1
+        for clss in clss_mean_imgs:
+            if clss == 'healthy':
+                continue
+            else:
+                clss_mean_imgs[clss] -= clss_mean_imgs['healthy']
+                plt.subplot(2,math.ceil(self.num_classes/2),counter_img)
+                plt.imshow(clss_mean_imgs[clss])
+                plt.title(f"Class: {clss} (- healthy))")
+                counter_img += 1
+        
+        plt.show()
+        return
+    
+    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
+        
+        # init full list of images array
+        res_fac = self.args.eigen_resize_factor
+        a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 334,500
+        full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]*size[2]))
+        
+        # iterating through each file
+        for idx, fn in enumerate(tqdm(list_of_filename)):
+            fp = os.path.join(path,fn)
+            # read image
+            img = plt.imread(fp)
+            # resize image
+            img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_CUBIC)
+            # turn that into a vector / 1D array
+            img = img.ravel()
+            full_mat[idx] = img
+            
+            if idx >= self.args.eigen_img_counter:
+                break
+            
+        return full_mat
+    
+    def eigen_imgs(self):
+        labels = self.folds['fold_1']['train_labels']
+        imgs = self.folds['fold_1']['train']
+        
+        # calculate mean image for all classes
+        for i, lbl_clss in enumerate(self.label_code):
+            indx = self.label_code[lbl_clss]
+            clss_imgs = self.get_class_imgs(indx,imgs,labels)
+            full_mat = self.img2np(self.imgs_dir, clss_imgs)
         
         return
     
@@ -249,12 +311,10 @@ class DS_aux():
             self.show_rdm_imgs()
             
         # average image for each class
-        # ravel image into vector
-        # reshape to original size
+        if self.args.eda_mean_img == "True":
+            self.mean_image()
 
         # difference between average of images
-
-        # variability 
 
         # eigenfaces
 
@@ -313,8 +373,8 @@ def main(args):
     dataset_info = DS_aux(args)
     
     if args.eda == "True":
-        dataset_info.eda()
-        dataset_info.mean_image()
+        #dataset_info.eda()
+        dataset_info.eigen_imgs()
     
     for i in range(1,dataset_info.num_folds+1):
         # TO-DO: turn this into a function
