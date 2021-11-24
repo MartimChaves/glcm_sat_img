@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
+    parser.add_argument('--mean_img_counter', type=int, default=100, help='Number of random images to show.')
+    
     args = parser.parse_args()
     return args
 
@@ -184,34 +186,36 @@ class DS_aux():
         return
 
     
-    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
+    def calc_mean_img(self, path, list_of_filename, size = (2672, 4000, 3)):
         # iterating through each file
         flag = False
-        for fn in tqdm(list_of_filename):
+        counter = 0
+        for idx, fn in tqdm(enumerate(list_of_filename)):
             fp = os.path.join(path,fn)
             # read image (array)
-            img_ts = plt.imread(fp)
-            if img_ts.shape == size: #TO-DO: Improve this (add functionality)
+            img = plt.imread(fp)
+            if img.shape == size: #TO-DO: Improve this (add functionality)
                 # turn that into a vector / 1D array
-                img_ts = [img_ts.ravel()]
+                img = img.ravel()
+                img = img.astype(np.float64)
                 if flag:
-                    full_mat = np.concatenate((full_mat, img_ts))
+                    full_mat = np.add(full_mat,img)
+                    counter += 1
                 else:
-                    full_mat = img_ts
+                    full_mat = img
                     flag = True
-                """
-                try:
-                    # concatenate different images
-                    full_mat = np.concatenate((full_mat, img_ts))
-                except:# UnboundLocalError: 
-                    # if not assigned yet, assign one
-                    full_mat = img_ts"""
+                    counter += 1
             else:
                 continue
-                
-        return full_mat
+            
+            if idx > self.args.mean_img_counter:
+                break
+        full_mat = np.divide(full_mat,counter)
+        mean_img = full_mat.reshape(size)
+        mean_img = mean_img.astype(np.uint8)
+        return mean_img
     
-    def calc_mean_img(self, full_mat, title, size = (2672, 4000, 3)):
+    def class_mean_img(self, full_mat, title, size = (2672, 4000, 3)):
         # calculate the average
         mean_img = np.mean(full_mat, axis = 0)
         # reshape it back to a matrix
@@ -226,11 +230,11 @@ class DS_aux():
         
         # temp code
         labels = self.folds['fold_1']['train_labels']
-        healthy_indx = [idx for idx,lbl in enumerate(labels) if (lbl == np.array([1,0,0,0,0,0])).all()]
         imgs = self.folds['fold_1']['train']
+        
+        healthy_indx = [idx for idx,lbl in enumerate(labels) if (lbl == np.array([1,0,0,0,0,0])).all()]
         healthy_imgs = imgs[healthy_indx]
-        full_healthy = self.img2np(self.imgs_dir,healthy_imgs)
-        mean_healthy = self.calc_mean_img(full_healthy,'healthy')
+        mean_healthy = self.calc_mean_img(self.imgs_dir,healthy_imgs)
         
         #
         for lbl_clss in self.label_code:
