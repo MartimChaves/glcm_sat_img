@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
+from sklearn.decomposition import PCA
 # stratified k-folds
 from skmultilearn.model_selection.iterative_stratification import IterativeStratification
 import matplotlib.pyplot as plt
@@ -36,14 +37,84 @@ def parse_args():
     parser.add_argument('--eda_mean_img', type=str, default='True', help='If true, show class mean image (EDA).')
     parser.add_argument('--mean_img_counter', type=int, default=30, help='Number of imgs to use to calculate class mean.')
     
+    parser.add_argument('--eda_eigen_img', type=str, default='True', help='If true, show eigen images (EDA).')
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=30, help='Number of imgs to use for eigen faces.')
     
     args = parser.parse_args()
     return args
 
+
+class Image_Funcs():
+    
+    def __init__(self, args, label_code):
+        
+        self.args = args
+        self.imgs_dir = os.path.join(self.args.root,"train_images")
+        self.labels_dir = os.path.join(self.args.root,"train.csv")
+        #self.extra_imgs_dir = os.path.join(self.args.root,"test_images")
+        self.label_code = label_code
+        self.num_classes = len(label_code.keys())
+        
+        return
+    
+    def norm_uint8(self, img): # TO-DO
+        img = np.add(img, np.min(img))
+        return img
+    
+    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
+        
+        # init full list of images array
+        res_fac = self.args.eigen_resize_factor
+        a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 334,500
+        full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]*size[2]))
+        
+        # iterating through each file
+        for idx, fn in enumerate(tqdm(list_of_filename)):
+            fp = os.path.join(path,fn)
+            # read image
+            img = plt.imread(fp)
+            # resize image
+            img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_CUBIC)
+            # turn that into a vector / 1D array
+            img = img.ravel()
+            full_mat[idx] = img
+            
+            if idx >= self.args.eigen_img_counter-1:
+                break
+            
+        return full_mat
+    
+    def class_eigen_imgs(self, full_mat, n_comp = 0.7):
+        
+        # fit PCA to describe n_comp * variability in the class
+        pca = PCA(n_components = n_comp, whiten = True)
+        pca.fit(full_mat)
+        print(f'Number of PC: {pca.n_components_}')
+        return pca
+    
+    def plot_pca(self, pca, lbl_clss, size = (334, 500, 3)):
+        # plot eigenimages in a grid
+        n = pca.n_components_
+        fig = plt.figure(figsize=(8, 8))
+        r = int(n**.5)
+        c = math.ceil(n/ r)
+        
+        for i in range(n):
+            ax = fig.add_subplot(r, c, i + 1, xticks = [], yticks = [])
+            pca_component = pca.components_[i]
+            pca_component = pca.components_[i]+np.min(pca.components_[i])
+            pca_component /= np.max(pca_component)
+            pca_component *= 255
+            pca_component = pca_component.astype(np.uint8) 
+            ax.imshow(pca_component.reshape(size), cmap='Greys_r')
+            
+        plt.axis('off')
+        plt.title(f'Class: {lbl_clss}')
+        plt.show()
+
 # TO-DO: Create parent class that contains aug functions for EDA
-class DS_aux():
+class DS_aux(Image_Funcs):
     """
     Dataset-auxilliary class:
     Contains EDA and Dataset split
@@ -56,13 +127,8 @@ class DS_aux():
                              'rust':4,
                              'powdery_mildew':5}
                  ):
+        super().__init__(args, label_code)
         
-        self.args = args
-        self.imgs_dir = os.path.join(self.args.root,"train_images")
-        self.labels_dir = os.path.join(self.args.root,"train.csv")
-        #self.extra_imgs_dir = os.path.join(self.args.root,"test_images")
-        self.label_code = label_code
-        self.num_classes = len(label_code.keys())
         
         self.data_split()
         
@@ -94,9 +160,10 @@ class DS_aux():
         np.random.shuffle(img_files)
         
         # get split fractions
-        trainset_fraction = int(self.args.dataset_split.split(",")[0])/100.
-        valset_fraction = int(self.args.dataset_split.split(",")[1])/100.
-        testset_fraction = int(self.args.dataset_split.split(",")[2])/100.
+        split_vals = self.args.dataset_split.split(",")
+        trainset_fraction = int(split_vals[0])/100.
+        valset_fraction = int(split_vals[1])/100.
+        testset_fraction = int(split_vals[2])/100.
                 
         # cross-validation
         self.num_folds = int((trainset_fraction+valset_fraction)/valset_fraction)
@@ -269,29 +336,6 @@ class DS_aux():
         plt.show()
         return
     
-    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
-        
-        # init full list of images array
-        res_fac = self.args.eigen_resize_factor
-        a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 334,500
-        full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]*size[2]))
-        
-        # iterating through each file
-        for idx, fn in enumerate(tqdm(list_of_filename)):
-            fp = os.path.join(path,fn)
-            # read image
-            img = plt.imread(fp)
-            # resize image
-            img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_CUBIC)
-            # turn that into a vector / 1D array
-            img = img.ravel()
-            full_mat[idx] = img
-            
-            if idx >= self.args.eigen_img_counter:
-                break
-            
-        return full_mat
-    
     def eigen_imgs(self):
         labels = self.folds['fold_1']['train_labels']
         imgs = self.folds['fold_1']['train']
@@ -301,6 +345,8 @@ class DS_aux():
             indx = self.label_code[lbl_clss]
             clss_imgs = self.get_class_imgs(indx,imgs,labels)
             full_mat = self.img2np(self.imgs_dir, clss_imgs)
+            pca = self.class_eigen_imgs(full_mat)
+            self.plot_pca(pca, lbl_clss)
         
         return
     
@@ -314,9 +360,9 @@ class DS_aux():
         if self.args.eda_mean_img == "True":
             self.mean_image()
 
-        # difference between average of images
-
         # eigenfaces
+        if self.args.eda_eigen_img == "True":
+            self.eigen_imgs()
 
         # RGB/HSV/Grey
         # Max value, min value, mean, std for each class
@@ -373,8 +419,7 @@ def main(args):
     dataset_info = DS_aux(args)
     
     if args.eda == "True":
-        #dataset_info.eda()
-        dataset_info.eigen_imgs()
+        dataset_info.eda()
     
     for i in range(1,dataset_info.num_folds+1):
         # TO-DO: turn this into a function
