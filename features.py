@@ -31,16 +31,17 @@ def parse_args():
     
     # EDA
     parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
-    parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
+    parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
-    parser.add_argument('--eda_mean_img', type=str, default='True', help='If true, show class mean image (EDA).')
+    parser.add_argument('--eda_mean_img', type=str, default='False', help='If true, show class mean image (EDA).')
     parser.add_argument('--mean_img_counter', type=int, default=30, help='Number of imgs to use to calculate class mean.')
     
-    parser.add_argument('--eda_eigen_img', type=str, default='True', help='If true, show eigen images (EDA).')
+    parser.add_argument('--eda_eigen_img', type=str, default='False', help='If true, show eigen images (EDA).')
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
-    parser.add_argument('--eigen_img_counter', type=int, default=30, help='Number of imgs to use for eigen faces.')
+    parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
+    parser.add_argument('--stats_len', type=int, default=1000, help='Resize factor for images used in eigen faces.')
     args = parser.parse_args()
     return args
 
@@ -55,32 +56,172 @@ class Image_Funcs():
         #self.extra_imgs_dir = os.path.join(self.args.root,"test_images")
         self.label_code = label_code
         self.num_classes = len(label_code.keys())
-        
-        return
     
-    def norm_uint8(self, img): # TO-DO
+    def norm_uint8(self, img):
         img = np.add(img, np.min(img))
+        img = np.divide(img,np.max(img))
+        img = np.multiply(img,255)
+        img = img.astype(np.uint8) 
         return img
     
+    def rgb2gray(self,img):
+        
+        img = np.copy(img.astype(np.float32))
+        gray = np.add(img[0::,0::,0],np.add(img[0::,0::,1],img[0::,0::,2]))
+        gray = np.divide(gray,3)
+        gray = gray.astype(np.uint8)
+        
+        return gray
+    
+    def get_stats(self, clss_imgs, lbl_clss):
+        # img is a single channel
+        init_base_stats = np.multiply(np.ones(self.args.stats_len),-1)
+        stats = {
+            'min'        : np.copy(init_base_stats),
+            'max'        : np.copy(init_base_stats),
+            'mean'       : np.copy(init_base_stats),
+            'std'        : np.copy(init_base_stats),
+            'homogeneity': np.copy(init_base_stats),
+            'contrast'   : np.copy(init_base_stats),
+            'entropy'    : np.copy(init_base_stats),
+            'cross-corr' : np.copy(init_base_stats)
+        }
+        
+        channel_stats = {
+            'R'   : stats.copy(),
+            'G'   : stats.copy(),
+            'B'   : stats.copy(),
+            'H'   : stats.copy(),
+            'S'   : stats.copy(),
+            'V'   : stats.copy(),
+            'Gray':  stats.copy()
+        }
+        
+        channels = {0: 'R', 1: 'G', 2: 'B'}
+        hsv = {0: 'H', 1: 'S', 2: 'V'}
+        for file in clss_imgs:
+            img_path = os.path.join(self.imgs_dir,file)
+            img = plt.imread(img_path)
+            # RGB
+            for idx, channel in enumerate(img):
+                for stat in stats:
+                    channel_stats[channels[idx]][stat]
+            # Gray
+            gray_img = self.rgb2gray(img)
+            for stat in stats:
+                channel_stats['Gray'][stat]
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+            # HSV
+            for idx, channel in enumerate(img_hsv):
+                for stat in stats:
+                    channel_stats[channels[idx]][stat]
+        return
+    
+    def plt_rgb_channels(self, clss_rdm_imgs, lbl_clss, num_imgs):
+        
+        def plot_img(num_imgs,i,img,text):
+            plt.subplot(num_imgs,8,i)
+            plt.imshow(img)
+            plt.title(f"{text} {i}")
+        
+        plt_img_counter = 1
+        channels = {0: 'R', 1: 'G', 2: 'B'}
+        hsv = {0: 'H', 1: 'S', 2: 'V'}
+        for file in clss_rdm_imgs:
+            img_path = os.path.join(self.imgs_dir,file)
+            img = plt.imread(img_path)
+            
+            plot_img(num_imgs,plt_img_counter,img,f"{lbl_clss} RBG: ")
+            plt_img_counter += 1
+            
+            for idx in range(img.shape[-1]):
+                channel = img[..., idx]
+                plot_img(num_imgs, plt_img_counter, channel, f"{lbl_clss} {channels[idx]}: ")
+                plt_img_counter += 1
+                
+            gray_img = self.rgb2gray(img)
+            plot_img(num_imgs, plt_img_counter, gray_img, f"{lbl_clss} grayscale: ")
+            plt_img_counter += 1
+            
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+            for idx in range(img_hsv.shape[-1]):
+                channel = img_hsv[..., idx]
+                plot_img(num_imgs, plt_img_counter, channel, f"{lbl_clss} {hsv[idx]}: ")
+                plt_img_counter += 1
+
+        plt.show()
+        
+    # *** MEAN IMAGE ***
+    def calc_mean_img(self, path, list_of_filename, size = (2672, 4000, 3)):
+        # iterating through each file
+        flag = False
+        counter = 0
+        for idx, fn in enumerate(tqdm(list_of_filename)):
+            fp = os.path.join(path,fn)
+            # read image (array)
+            img = plt.imread(fp)
+            if img.shape == size: #TO-DO: Improve this (add functionality)
+                # turn that into a vector / 1D array
+                img = img.ravel()
+                img = img.astype(np.float64)
+                if flag:
+                    full_mat = np.add(full_mat,img)
+                    counter += 1
+                else:
+                    full_mat = img
+                    flag = True
+                    counter += 1
+            else:
+                continue
+            if idx > self.args.mean_img_counter-1:
+                break
+            
+        full_mat = np.divide(full_mat,counter)
+        mean_img = full_mat.reshape(size)
+        mean_img = mean_img.astype(np.uint8)
+        return mean_img
+    
+    def get_class_imgs(self,indx,imgs,labels):
+        onehot_lbl = np.zeros(len(self.label_code.keys()))
+        onehot_lbl[indx] = 1
+        
+        imgs_indx = [idx for idx,lbl in enumerate(labels) if (lbl == onehot_lbl).all()]
+        class_imgs = imgs[imgs_indx]
+        
+        return class_imgs
+    
+    def class_mean_img(self, indx, imgs, labels):
+        
+        class_imgs = self.get_class_imgs(indx,imgs,labels)
+        class_mean_img = self.calc_mean_img(self.imgs_dir,class_imgs)
+        
+        return class_mean_img
+    
+    # *** EIGEN IMAGES **
     def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
         
         # init full list of images array
         res_fac = self.args.eigen_resize_factor
         a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 334,500
-        full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]*size[2]))
+        full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]))
         
         # iterating through each file
+        real_counter = 0
         for idx, fn in enumerate(tqdm(list_of_filename)):
             fp = os.path.join(path,fn)
             # read image
             img = plt.imread(fp)
-            # resize image
-            img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_CUBIC)
-            # turn that into a vector / 1D array
-            img = img.ravel()
-            full_mat[idx] = img
             
-            if idx >= self.args.eigen_img_counter-1:
+            if img.shape == size:
+                img = self.rgb2gray(img)
+                # resize image
+                img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_AREA) # INTER_CUBIC if rgb img
+                # turn that into a vector / 1D array
+                img = img.ravel()
+                full_mat[real_counter] = img
+                real_counter += 1
+            
+            if real_counter >= self.args.eigen_img_counter:
                 break
             
         return full_mat
@@ -89,6 +230,7 @@ class Image_Funcs():
         
         # fit PCA to describe n_comp * variability in the class
         pca = PCA(n_components = n_comp, whiten = True)
+        print('Fitting PCA...')
         pca.fit(full_mat)
         print(f'Number of PC: {pca.n_components_}')
         return pca
@@ -102,12 +244,7 @@ class Image_Funcs():
         
         for i in range(n):
             ax = fig.add_subplot(r, c, i + 1, xticks = [], yticks = [])
-            pca_component = pca.components_[i]
-            pca_component = pca.components_[i]+np.min(pca.components_[i])
-            pca_component /= np.max(pca_component)
-            pca_component *= 255
-            pca_component = pca_component.astype(np.uint8) 
-            ax.imshow(pca_component.reshape(size), cmap='Greys_r')
+            ax.imshow(self.norm_uint8(pca.components_[i]).reshape(size[0],size[1]), cmap='Greys_r')
             
         plt.axis('off')
         plt.title(f'Class: {lbl_clss}')
@@ -128,11 +265,7 @@ class DS_aux(Image_Funcs):
                              'powdery_mildew':5}
                  ):
         super().__init__(args, label_code)
-        
-        
         self.data_split()
-        
-        return
 
     def convert_label(self, lbl_raw):
         onehot = [0 for _ in range(len(self.label_code.keys()))]
@@ -218,11 +351,15 @@ class DS_aux(Image_Funcs):
         fold_size = self.folds["fold_1"]['val'].shape[0]
         print("Percentage of intersection between different folds val sets: ",round(intersect/fold_size*100,2)) 
         """
-        return
     
     ### exploratory data analysis
     def show_rdm_imgs(self):
-
+        
+        def plot_img(num_imgs,i,img,counter,text):
+            plt.subplot(3,num_imgs,i)
+            plt.imshow(img)
+            plt.title(f"{text} {counter}")
+            
         num_imgs = self.args.eda_rdm_img_num
         
         train_imgs = np.random.choice(self.folds['fold_1']['train'],num_imgs,replace=False)
@@ -238,70 +375,28 @@ class DS_aux(Image_Funcs):
         for i in range(1,(num_imgs*3)+1):
             if i <= num_imgs:
                 img = plt.imread(train_imgs_file[i-1])
-                plt.subplot(3,num_imgs,i)
-                plt.imshow(img)
-                plt.title("Train image " + str(i))
+                plot_img(num_imgs,i,img,i,"Train image")
             elif i>num_imgs and i <= num_imgs*2:
                 j = i-num_imgs
                 img = plt.imread(val_imgs_file[j-1])
-                plt.subplot(3,num_imgs,i)
-                plt.imshow(img)
-                plt.title("Val image " + str(j))
+                plot_img(num_imgs,i,img,j,"Val image")
             elif i > num_imgs*2:
                 k = i-num_imgs*2
                 img = plt.imread(test_imgs_file[k-1])
-                plt.subplot(3,num_imgs,i)
-                plt.imshow(img)
-                plt.title("Test image " + str(k))
+                plot_img(num_imgs,i,img,k,"Test image")
         
         plt.show()
         
-        return
-    
-    def calc_mean_img(self, path, list_of_filename, size = (2672, 4000, 3)):
-        # iterating through each file
-        flag = False
-        counter = 0
-        for idx, fn in enumerate(tqdm(list_of_filename)):
-            fp = os.path.join(path,fn)
-            # read image (array)
-            img = plt.imread(fp)
-            if img.shape == size: #TO-DO: Improve this (add functionality)
-                # turn that into a vector / 1D array
-                img = img.ravel()
-                img = img.astype(np.float64)
-                if flag:
-                    full_mat = np.add(full_mat,img)
-                    counter += 1
-                else:
-                    full_mat = img
-                    flag = True
-                    counter += 1
-            else:
-                continue
-            if idx > self.args.mean_img_counter:
-                break
-            
-        full_mat = np.divide(full_mat,counter)
-        mean_img = full_mat.reshape(size)
-        mean_img = mean_img.astype(np.uint8)
-        return mean_img
-    
-    def get_class_imgs(self,indx,imgs,labels):
-        onehot_lbl = np.zeros(len(self.label_code.keys()))
-        onehot_lbl[indx] = 1
+        # show random per class images
+        labels = self.folds['fold_1']['train_labels']
+        imgs = self.folds['fold_1']['train']
         
-        imgs_indx = [idx for idx,lbl in enumerate(labels) if (lbl == onehot_lbl).all()]
-        class_imgs = imgs[imgs_indx]
-        
-        return class_imgs
-    
-    def class_mean_img(self, indx, imgs, labels):
-        
-        class_imgs = self.get_class_imgs(indx,imgs,labels)
-        class_mean_img = self.calc_mean_img(self.imgs_dir,class_imgs)
-        
-        return class_mean_img
+        # calculate mean image for all classes
+        for lbl_clss, lbl_indx in self.label_code.items():
+            clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
+            clss_rdm_imgs = np.random.choice(clss_imgs,num_imgs,replace=False)
+            self.plt_rgb_channels(clss_rdm_imgs, lbl_clss, num_imgs)
+            # RBG, separate channels, separate HSV, greyscale
     
     def mean_image(self):
         
@@ -334,22 +429,18 @@ class DS_aux(Image_Funcs):
                 counter_img += 1
         
         plt.show()
-        return
     
     def eigen_imgs(self):
         labels = self.folds['fold_1']['train_labels']
         imgs = self.folds['fold_1']['train']
         
         # calculate mean image for all classes
-        for i, lbl_clss in enumerate(self.label_code):
-            indx = self.label_code[lbl_clss]
-            clss_imgs = self.get_class_imgs(indx,imgs,labels)
+        for lbl_clss, lbl_indx in self.label_code.items():
+            clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
             full_mat = self.img2np(self.imgs_dir, clss_imgs)
             pca = self.class_eigen_imgs(full_mat)
             self.plot_pca(pca, lbl_clss)
         
-        return
-    
     def eda(self):
 
         # random images
@@ -368,8 +459,6 @@ class DS_aux(Image_Funcs):
         # Max value, min value, mean, std for each class
         # correlation for each class and in general
 
-        return
-
 ### feature development
 
 ### feature selection
@@ -384,8 +473,6 @@ class Dataset(torch.utils.data.Dataset):
         self.labels = labels
         
         self.imgs_dir = os.path.join(self.args.root,"train_images")
-        
-        return
     
     def __len__(self):
         return len(self.data)
@@ -442,9 +529,6 @@ def main(args):
             print(f"Validating - epoch: {epoch}")
             for imgs, labels, idxs in tqdm(val_gen):
                 imgs, labels = imgs.to(device), labels.to(device) 
-    
-    return
-
 
 if __name__ == "__main__":
     args = parse_args()
