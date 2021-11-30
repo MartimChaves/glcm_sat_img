@@ -73,6 +73,10 @@ class Image_Funcs():
         
         return gray
     
+    def get_glcm(self, glcm):
+        
+        return glcm
+    
     def get_stats(self, clss_imgs, lbl_clss):
         # img is a single channel
         init_base_stats = np.multiply(np.ones(self.args.stats_len),-1)
@@ -87,6 +91,17 @@ class Image_Funcs():
             'cross-corr' : np.copy(init_base_stats)
         }
         
+        stats_calc = {
+            'min'        : np.min,
+            'max'        : np.max,
+            'mean'       : np.mean,
+            'std'        : np.std,
+            'homogeneity': np.min,
+            'contrast'   : np.min,
+            'entropy'    : np.min,
+            'cross-corr' : np.min
+        }
+        
         channel_stats = {
             'R'   : stats.copy(),
             'G'   : stats.copy(),
@@ -94,27 +109,42 @@ class Image_Funcs():
             'H'   : stats.copy(),
             'S'   : stats.copy(),
             'V'   : stats.copy(),
-            'Gray':  stats.copy()
+            'Gray': stats.copy()
         }
         
         channels = {0: 'R', 1: 'G', 2: 'B'}
         hsv = {0: 'H', 1: 'S', 2: 'V'}
         for file in clss_imgs:
+            
+            stats_indx = np.min(np.where(stats['min']==-1)[0])
+            
             img_path = os.path.join(self.imgs_dir,file)
             img = plt.imread(img_path)
             # RGB
-            for idx, channel in enumerate(img):
+            for idx in range(img.shape[-1]):
+                channel = img[..., idx]
+                channel_glcm = self.get_glcm(channel)
+                np_args = {'a':channel}
+                obj_args = {'glcm':channel_glcm}
                 for stat in stats:
-                    channel_stats[channels[idx]][stat]
+                    try:
+                        stat_val = stats_calc[stat](**np_args)
+                    except Exception:
+                        stat_val = stats_calc[stat](**obj_args)
+                    # TO-DO: copying dict is not working - value updated for all channels
+                    channel_stats[channels[idx]][stat][stats_indx] = stat_val
             # Gray
             gray_img = self.rgb2gray(img)
             for stat in stats:
                 channel_stats['Gray'][stat]
-            img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
             # HSV
-            for idx, channel in enumerate(img_hsv):
+            img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+            for idx in range(img_hsv.shape[-1]):
+                channel = img_hsv[..., idx]
                 for stat in stats:
                     channel_stats[channels[idx]][stat]
+                    
+                    
         return
     
     def plt_rgb_channels(self, clss_rdm_imgs, lbl_clss, num_imgs):
@@ -396,6 +426,7 @@ class DS_aux(Image_Funcs):
             clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
             clss_rdm_imgs = np.random.choice(clss_imgs,num_imgs,replace=False)
             self.plt_rgb_channels(clss_rdm_imgs, lbl_clss, num_imgs)
+            self.get_stats(clss_imgs, lbl_clss)
             # RBG, separate channels, separate HSV, greyscale
     
     def mean_image(self):
