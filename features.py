@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
 from sklearn.decomposition import PCA
+from skimage.feature import graycomatrix, graycoprops
 # stratified k-folds
 from skmultilearn.model_selection.iterative_stratification import IterativeStratification
 import matplotlib.pyplot as plt
@@ -41,7 +42,7 @@ def parse_args():
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
-    parser.add_argument('--stats_len', type=int, default=1000, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--stats_len', type=int, default=100, help='Resize factor for images used in eigen faces.')
     args = parser.parse_args()
     return args
 
@@ -73,10 +74,14 @@ class Image_Funcs():
         
         return gray
     
-    def get_glcm(self, glcm):
-        
+    def get_glcm(self, img, offsetdist=[1], offsetang = [7*np.pi/4], imgvals = 256):
+        glcm = graycomatrix(img, distances=offsetdist, angles=offsetang, levels=imgvals,
+                        symmetric=False, normed=True)
         return glcm
     
+    def get_glcm_metrics(self, prop = '',glcm = ''):
+        return graycoprops(glcm, prop)[0, 0]
+        
     def get_stats(self, clss_imgs, lbl_clss):
         # img is a single channel
         init_base_stats = np.multiply(np.ones(self.args.stats_len),-1)
@@ -87,8 +92,8 @@ class Image_Funcs():
             'std'        : np.copy(init_base_stats),
             'homogeneity': np.copy(init_base_stats),
             'contrast'   : np.copy(init_base_stats),
-            'entropy'    : np.copy(init_base_stats),
-            'cross-corr' : np.copy(init_base_stats)
+            'energy'     : np.copy(init_base_stats),
+            'correlation': np.copy(init_base_stats)
         }
         
         stats_calc = {
@@ -96,27 +101,31 @@ class Image_Funcs():
             'max'        : np.max,
             'mean'       : np.mean,
             'std'        : np.std,
-            'homogeneity': np.min,
-            'contrast'   : np.min,
-            'entropy'    : np.min,
-            'cross-corr' : np.min
+            'homogeneity': self.get_glcm_metrics,
+            'contrast'   : self.get_glcm_metrics,
+            'energy'     : self.get_glcm_metrics,
+            'correlation': self.get_glcm_metrics
         }
         
         channel_stats = {
-            'R'   : stats.copy(),
-            'G'   : stats.copy(),
-            'B'   : stats.copy(),
-            'H'   : stats.copy(),
-            'S'   : stats.copy(),
-            'V'   : stats.copy(),
-            'Gray': stats.copy()
+            'R'   : copy.deepcopy(stats),
+            'G'   : copy.deepcopy(stats),
+            'B'   : copy.deepcopy(stats),
+            'H'   : copy.deepcopy(stats),
+            'S'   : copy.deepcopy(stats),
+            'V'   : copy.deepcopy(stats),
+            'Gray': copy.deepcopy(stats)
         }
         
         channels = {0: 'R', 1: 'G', 2: 'B'}
         hsv = {0: 'H', 1: 'S', 2: 'V'}
-        for file in clss_imgs:
+        for file in tqdm(clss_imgs):
             
-            stats_indx = np.min(np.where(stats['min']==-1)[0])
+            # get indx of unfilled stat
+            available_indxs = np.where(channel_stats['R']['min']==-1)[0]
+            if not available_indxs.any():
+                break
+            stats_indx = np.min(available_indxs)
             
             img_path = os.path.join(self.imgs_dir,file)
             img = plt.imread(img_path)
@@ -129,23 +138,33 @@ class Image_Funcs():
                 for stat in stats:
                     try:
                         stat_val = stats_calc[stat](**np_args)
-                    except Exception:
-                        stat_val = stats_calc[stat](**obj_args)
-                    # TO-DO: copying dict is not working - value updated for all channels
+                    except:
+                        stat_val = stats_calc[stat](prop = stat, **obj_args)
                     channel_stats[channels[idx]][stat][stats_indx] = stat_val
             # Gray
             gray_img = self.rgb2gray(img)
+            gray_glcm = self.get_glcm(gray_img)
             for stat in stats:
-                channel_stats['Gray'][stat]
+                try:
+                    stat_val = stats_calc[stat](**{'a':gray_img})
+                except:
+                    stat_val = stats_calc[stat](prop = stat, **{'glcm':gray_glcm})
+                channel_stats['Gray'][stat] = stat_val
             # HSV
             img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
             for idx in range(img_hsv.shape[-1]):
                 channel = img_hsv[..., idx]
+                channel_glcm = self.get_glcm(channel)
+                np_args = {'a':channel}
+                obj_args = {'glcm':channel_glcm}
                 for stat in stats:
-                    channel_stats[channels[idx]][stat]
+                    try:
+                        stat_val = stats_calc[stat](**np_args)
+                    except:
+                        stat_val = stats_calc[stat](prop = stat, **obj_args)
+                    channel_stats[hsv[idx]][stat][stats_indx] = stat_val
                     
-                    
-        return
+        return channel_stats
     
     def plt_rgb_channels(self, clss_rdm_imgs, lbl_clss, num_imgs):
         
@@ -426,7 +445,7 @@ class DS_aux(Image_Funcs):
             clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
             clss_rdm_imgs = np.random.choice(clss_imgs,num_imgs,replace=False)
             self.plt_rgb_channels(clss_rdm_imgs, lbl_clss, num_imgs)
-            self.get_stats(clss_imgs, lbl_clss)
+            stats = self.get_stats(clss_imgs, lbl_clss)
             # RBG, separate channels, separate HSV, greyscale
     
     def mean_image(self):
