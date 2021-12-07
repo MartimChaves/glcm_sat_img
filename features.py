@@ -1,6 +1,7 @@
 # imports
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from sklearn.utils import shuffle
 from sklearn.decomposition import PCA
 from skimage.feature import graycomatrix, graycoprops
@@ -42,7 +43,7 @@ def parse_args():
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
-    parser.add_argument('--stats_len', type=int, default=100, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--stats_len', type=int, default=20, help='Resize factor for images used in eigen faces.')
     args = parser.parse_args()
     return args
 
@@ -448,6 +449,34 @@ class DS_aux(Image_Funcs):
             stats = self.get_stats(clss_imgs, lbl_clss)
             # RBG, separate channels, separate HSV, greyscale
     
+    def metrics_distr(self): # show metrics distributions
+        
+        labels = self.folds['fold_1']['train_labels']
+        imgs = self.folds['fold_1']['train']
+        
+        full_stats = {}
+        # calculate mean image for all classes
+        for lbl_clss, lbl_indx in self.label_code.items():
+            clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
+            class_feats = self.get_stats(clss_imgs, lbl_clss)
+            full_stats[lbl_clss] = class_feats
+        
+        # build data frame
+        # R-min, R-max, ..., label
+        
+        # hist
+        for lbl, class_feats in full_stats.items():
+            for channel in class_feats:
+                for feat_name, feat_vals in class_feats[channel].items():
+                    sns.set(style='whitegrid', palette="deep", font_scale=1.1, rc={"figure.figsize": [8, 5]})
+                    sns.distplot(
+                        feat_vals, norm_hist=False, kde=False, bins=20, hist_kws={"alpha": 1}
+                    ).set(xlabel=f'Channel {channel} - {feat_name}', ylabel='Count');
+        
+        # max, min, mean, std
+        
+        pass
+    
     def mean_image(self):
         
         labels = self.folds['fold_1']['train_labels']
@@ -493,6 +522,8 @@ class DS_aux(Image_Funcs):
         
     def eda(self):
 
+        self.metrics_distr()
+        
         # random images
         if self.args.eda_rdm_img == "True":
             self.show_rdm_imgs()
