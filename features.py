@@ -1,5 +1,6 @@
 # imports
 import numpy as np
+from numpy.core.numeric import full
 import pandas as pd
 import seaborn as sns
 from sklearn.utils import shuffle
@@ -43,7 +44,7 @@ def parse_args():
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
-    parser.add_argument('--stats_len', type=int, default=20, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--stats_len', type=int, default=2, help='Resize factor for images used in eigen faces.')
     args = parser.parse_args()
     return args
 
@@ -109,21 +110,21 @@ class Image_Funcs():
         }
         
         channel_stats = {
-            'R'   : copy.deepcopy(stats),
-            'G'   : copy.deepcopy(stats),
-            'B'   : copy.deepcopy(stats),
-            'H'   : copy.deepcopy(stats),
-            'S'   : copy.deepcopy(stats),
-            'V'   : copy.deepcopy(stats),
-            'Gray': copy.deepcopy(stats)
+            'r'   : copy.deepcopy(stats),
+            'g'   : copy.deepcopy(stats),
+            'b'   : copy.deepcopy(stats),
+            'h'   : copy.deepcopy(stats),
+            's'   : copy.deepcopy(stats),
+            'v'   : copy.deepcopy(stats),
+            'gray': copy.deepcopy(stats)
         }
         
-        channels = {0: 'R', 1: 'G', 2: 'B'}
-        hsv = {0: 'H', 1: 'S', 2: 'V'}
+        channels = {0: 'r', 1: 'g', 2: 'b'}
+        hsv = {0: 'h', 1: 's', 2: 'v'}
         for file in tqdm(clss_imgs):
             
             # get indx of unfilled stat
-            available_indxs = np.where(channel_stats['R']['min']==-1)[0]
+            available_indxs = np.where(channel_stats['r']['min']==-1)[0]
             if not available_indxs.any():
                 break
             stats_indx = np.min(available_indxs)
@@ -150,7 +151,7 @@ class Image_Funcs():
                     stat_val = stats_calc[stat](**{'a':gray_img})
                 except:
                     stat_val = stats_calc[stat](prop = stat, **{'glcm':gray_glcm})
-                channel_stats['Gray'][stat] = stat_val
+                channel_stats['gray'][stat][stats_indx] = stat_val
             # HSV
             img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
             for idx in range(img_hsv.shape[-1]):
@@ -232,6 +233,10 @@ class Image_Funcs():
         return mean_img
     
     def get_class_imgs(self,indx,imgs,labels):
+        """
+        Returns file names of images that belong only to one class,
+        sort of returns 'pure' class representatives
+        """
         onehot_lbl = np.zeros(len(self.label_code.keys()))
         onehot_lbl[indx] = 1
         
@@ -454,28 +459,28 @@ class DS_aux(Image_Funcs):
         labels = self.folds['fold_1']['train_labels']
         imgs = self.folds['fold_1']['train']
         
-        full_stats = {}
+        full_stats_df = pd.DataFrame({})
         # calculate mean image for all classes
         for lbl_clss, lbl_indx in self.label_code.items():
             clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
             class_feats = self.get_stats(clss_imgs, lbl_clss)
-            full_stats[lbl_clss] = class_feats
+            
+            class_feats_df_raw = (pd.io.json.json_normalize(class_feats, sep='_')) #pandas.json_normalize
+            class_feats_df = pd.DataFrame({
+                }).assign(**{col_name:np.concatenate(class_feats_df_raw[col_name].values)
+                            for col_name in class_feats_df_raw.columns.tolist()})
+                
+            len_column = len(class_feats['r']['min'])
+            label_arr = np.ones(len_column).astype(np.uint8)*self.label_code[lbl_clss]
+            class_feats_df = class_feats_df.assign(label=label_arr)
+            
+            full_stats_df = pd.concat([full_stats_df, class_feats_df], axis=0)
         
-        # build data frame
-        # R-min, R-max, ..., label
-        
-        # hist
-        for lbl, class_feats in full_stats.items():
-            for channel in class_feats:
-                for feat_name, feat_vals in class_feats[channel].items():
-                    sns.set(style='whitegrid', palette="deep", font_scale=1.1, rc={"figure.figsize": [8, 5]})
-                    sns.distplot(
-                        feat_vals, norm_hist=False, kde=False, bins=20, hist_kws={"alpha": 1}
-                    ).set(xlabel=f'Channel {channel} - {feat_name}', ylabel='Count');
-        
+        columns_of_interest = [colname for colname in full_stats_df.columns if colname != 'label']
+        sns.set(style='whitegrid', palette="deep", font_scale=0.8, rc={"figure.figsize": [8, 5]})
+        full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
+                
         # max, min, mean, std
-        
-        pass
     
     def mean_image(self):
         
