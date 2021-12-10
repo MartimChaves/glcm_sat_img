@@ -479,7 +479,12 @@ class DS_aux(Image_Funcs):
         columns_of_interest = [colname for colname in full_stats_df.columns if colname != 'label']
         sns.set(style='whitegrid', palette="deep", font_scale=0.8, rc={"figure.figsize": [8, 5]})
         full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
-                
+        
+        # Are there highly correlated features?
+        corr_df = full_stats_df.corr()
+        high_corr = corr_df.where(corr_df.abs()>0.8)
+        
+        print("hi")
         # max, min, mean, std
     
     def mean_image(self):
