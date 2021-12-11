@@ -48,6 +48,60 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+def remove_collinear_features(x, threshold = 0.95, drop_cols = True, verbose = False):
+    '''
+    Original Author: Synergix (Stackoverflow) - with sligh modifications
+    Objective:
+        Remove collinear features in a dataframe with a correlation coefficient
+        greater than the threshold. Removing collinear features can help a model 
+        to generalize and improves the interpretability of the model.
+
+    Inputs: 
+        x: features dataframe
+        threshold: features with correlations greater than this value are removed
+
+    Output: 
+        dataframe that contains only the non-highly-collinear features
+    '''
+
+    # Calculate the correlation matrix
+    corr_matrix = x.corr()
+    iters = range(len(corr_matrix.columns) - 1)
+    drop_cols = []
+
+    high_corr = {}
+    
+    # Iterate through the correlation matrix and compare correlations
+    for i in iters:
+        for j in range(i+1):
+            item = corr_matrix.iloc[j:(j+1), (i+1):(i+2)]
+            col = item.columns
+            row = item.index
+            val = abs(item.values)
+            
+            if col[0]=='label' or row[0]=='label':
+                continue
+            
+            # If correlation exceeds the threshold
+            if val >= threshold:
+                corr_val = round(val[0][0],2)
+                # Print the correlated features and the correlation value
+                if verbose:
+                    print(f"{col.values[0]}|{row.values[0]}|{corr_val}")
+                
+                if col.values[0] not in high_corr.keys():
+                    high_corr[col.values[0]] = [[row.values[0],corr_val]]
+                else:
+                    high_corr[col.values[0]].append([row.values[0],corr_val])
+                    
+                drop_cols.append(col.values[0])
+
+    # Drop one of each pair of correlated columns
+    if drop_cols:
+        drops = set(drop_cols)
+        x = x.drop(columns=drops)
+
+    return x, high_corr
 
 class Image_Funcs():
     
@@ -481,10 +535,9 @@ class DS_aux(Image_Funcs):
         full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
         
         # Are there highly correlated features?
-        corr_df = full_stats_df.corr()
-        high_corr = corr_df.where(corr_df.abs()>0.8)
+        full_stats_df, high_corr_feats = remove_collinear_features(full_stats_df)
+        for key in high_corr_feats: print(f"{key}|{high_corr_feats[key]}")
         
-        print("hi")
         # max, min, mean, std
     
     def mean_image(self):
