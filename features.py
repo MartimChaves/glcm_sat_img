@@ -677,3 +677,8 @@ def main(args):
 if __name__ == "__main__":
     args = parse_args()
     main(args)
+    
+    """
+    sns.set_style("whitegrid");
+    sns.pairplot(iris, hue="species", size=3);
+    plt.show()"""
