@@ -538,6 +538,10 @@ class DS_aux(Image_Funcs):
         full_stats_df, high_corr_feats = remove_collinear_features(full_stats_df)
         for key in high_corr_feats: print(f"{key}|{high_corr_feats[key]}")
         
+        sns.set_style("whitegrid")
+        sns.pairplot(full_stats_df, hue="label")
+        plt.show()
+        
         # max, min, mean, std
     
     def mean_image(self):
