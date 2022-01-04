@@ -34,7 +34,7 @@ def parse_args():
     
     # EDA
     parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
-    parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
+    parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
     parser.add_argument('--eda_mean_img', type=str, default='False', help='If true, show class mean image (EDA).')
@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
-    parser.add_argument('--stats_len', type=int, default=2, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--stats_len', type=int, default=5, help='Resize factor for images used in eigen faces.')
     args = parser.parse_args()
     return args
 
@@ -528,19 +528,45 @@ class DS_aux(Image_Funcs):
             label_arr = np.ones(len_column).astype(np.uint8)*self.label_code[lbl_clss]
             class_feats_df = class_feats_df.assign(label=label_arr)
             
-            full_stats_df = pd.concat([full_stats_df, class_feats_df], axis=0)
+            full_stats_df = pd.concat([full_stats_df, class_feats_df], axis=0, ignore_index=True)
         
         columns_of_interest = [colname for colname in full_stats_df.columns if colname != 'label']
+        print("Preparing histogram plot...")
         sns.set(style='whitegrid', palette="deep", font_scale=0.8, rc={"figure.figsize": [8, 5]})
-        full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
+        hist = full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
+        plt.savefig('./plots/hist.png', dpi=200)
+        print("Histogram plot saved.")
         
         # Are there highly correlated features?
         full_stats_df, high_corr_feats = remove_collinear_features(full_stats_df)
         for key in high_corr_feats: print(f"{key}|{high_corr_feats[key]}")
         
+        # FIX THIS
+        fig, axes = plt.subplots(7, 8, figsize=(15,6))
+        
+        count_x = 0
+        count_y = 0
+        for col in full_stats_df.columns:
+                
+            kdeplot = sns.displot(ax=axes[count_x,count_y],data=full_stats_df, hue='label',x=col,
+                kind="kde", fill=True, legend=True, height=5, aspect=1.6)
+            
+            if count_y < 7:
+                count_x += 1
+                count_y = 0
+            else:
+                count_y += 1
+            
+        plt.savefig("./plots/kde.png")    
+        
+        """
+        print("Preparing pair plot...")
         sns.set_style("whitegrid")
-        sns.pairplot(full_stats_df, hue="label")
-        plt.show()
+        pairplot = sns.pairplot(full_stats_df, hue="label")
+        plt.savefig('pairplot.png')
+        print("Pair plot saved.")
+        #plt.show()
+        """
         
         # max, min, mean, std
     
@@ -656,6 +682,7 @@ def main(args):
     if args.eda == "True":
         dataset_info.eda()
     
+    """
     for i in range(1,dataset_info.num_folds+1):
         # TO-DO: turn this into a function
         train_imgs = dataset_info.folds["fold_"+str(i)]['train']
@@ -668,7 +695,6 @@ def main(args):
         val_set = Dataset(args,val_imgs,val_labels)
         val_gen = torch.utils.data.DataLoader(val_set, **params)
         
-        # TO-DO: transform arrays to tensors and pass to GPU
         for epoch in range(1):
             print(f"Training - epoch: {epoch}")
             for imgs, labels, idxs in tqdm(train_gen):
@@ -677,12 +703,7 @@ def main(args):
             print(f"Validating - epoch: {epoch}")
             for imgs, labels, idxs in tqdm(val_gen):
                 imgs, labels = imgs.to(device), labels.to(device) 
-
+    """
 if __name__ == "__main__":
     args = parse_args()
     main(args)
-    
-    """
-    sns.set_style("whitegrid");
-    sns.pairplot(iris, hue="species", size=3);
-    plt.show()"""
