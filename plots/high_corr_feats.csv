@@ -1,0 +1,17 @@
+,0,1,2,3
+g_homogeneity,"['r_homogeneity', 1.0]",,,
+g_contrast,"['r_contrast', 1.0]",,,
+b_homogeneity,"['r_homogeneity', 0.99]","['g_homogeneity', 0.98]",,
+b_contrast,"['r_contrast', 0.99]","['g_contrast', 0.98]",,
+v_mean,"['g_mean', 1.0]",,,
+v_std,"['g_std', 1.0]",,,
+v_homogeneity,"['r_homogeneity', 1.0]","['g_homogeneity', 1.0]","['b_homogeneity', 0.98]",
+v_contrast,"['r_contrast', 1.0]","['g_contrast', 1.0]","['b_contrast', 0.99]",
+v_energy,"['g_energy', 0.99]",,,
+v_correlation,"['g_correlation', 1.0]",,,
+gray_mean,"['g_mean', 0.95]","['v_mean', 0.96]",,
+gray_std,"['r_std', 0.98]",,,
+gray_homogeneity,"['r_homogeneity', 1.0]","['g_homogeneity', 1.0]","['b_homogeneity', 0.99]","['v_homogeneity', 0.99]"
+gray_contrast,"['r_contrast', 1.0]","['g_contrast', 1.0]","['b_contrast', 0.99]","['v_contrast', 1.0]"
+gray_energy,"['b_energy', 0.98]",,,
+gray_correlation,"['r_correlation', 0.99]","['g_correlation', 0.96]","['v_correlation', 0.97]",

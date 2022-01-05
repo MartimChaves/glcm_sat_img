@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 import time
 import math
+import csv
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -102,6 +103,43 @@ def remove_collinear_features(x, threshold = 0.95, drop_cols = True, verbose = F
         x = x.drop(columns=drops)
 
     return x, high_corr
+
+def high_corr_label(x, threshold = 0.6, verbose = False):
+
+    # Calculate the correlation matrix
+    corr_matrix = abs(x.corr())
+    label_corr_feat = []
+    label_corr_val = []
+    
+    for feat in corr_matrix['label'].index:
+        
+        if feat == 'label':
+            continue
+        
+        corr_val = corr_matrix['label'][feat]
+        if  corr_val > threshold:
+            
+            # Print the correlated features and the correlation value
+            if verbose:
+                print(f"{feat}:{corr_val}")
+            
+            corr_val = round(corr_val,2)
+            label_corr_feat.append(feat)
+            label_corr_val.append(corr_val)
+    
+    label_corr_feat_arr = np.array(label_corr_feat, dtype=object)
+    label_corr_val_arr = np.array(label_corr_val)
+    
+    order_ind = np.argsort(label_corr_val_arr)
+    
+    label_corr_feat_arr = label_corr_feat_arr[order_ind]
+    label_corr_val_arr = label_corr_val_arr[order_ind]
+    
+    label_corr = {}
+    for key, val in zip(label_corr_feat_arr,label_corr_val_arr):
+        label_corr[key] = val
+    
+    return label_corr_feat_arr, label_corr_val_arr, label_corr
 
 class Image_Funcs():
     
@@ -533,42 +571,69 @@ class DS_aux(Image_Funcs):
         columns_of_interest = [colname for colname in full_stats_df.columns if colname != 'label']
         print("Preparing histogram plot...")
         sns.set(style='whitegrid', palette="deep", font_scale=0.8, rc={"figure.figsize": [8, 5]})
-        hist = full_stats_df[columns_of_interest].hist(bins=15, figsize=(15, 6), layout=(7, 8))
+        full_stats_df[columns_of_interest].hist(bins=15, figsize=(20, 18), layout=(7, 8))
         plt.savefig('./plots/hist.png', dpi=200)
+        plt.clf()
         print("Histogram plot saved.")
         
         # Are there highly correlated features?
         full_stats_df, high_corr_feats = remove_collinear_features(full_stats_df)
-        for key in high_corr_feats: print(f"{key}|{high_corr_feats[key]}")
+        for key in high_corr_feats: 
+            print(f"{key}|{high_corr_feats[key]}")
         
-        # FIX THIS
-        fig, axes = plt.subplots(7, 8, figsize=(15,6))
+        high_corr_df = pd.DataFrame.from_dict(high_corr_feats, orient='index')
+        high_corr_df.to_csv("./plots/high_corr_feats.csv")
+        
+        sqrt_len_cols = np.sqrt(len(full_stats_df.columns))
+        dec_part_sqrt = sqrt_len_cols % 1
+        
+        if dec_part_sqrt >= 0.5:
+            dim_x = round(sqrt_len_cols) + 1
+            dim_y = round(sqrt_len_cols) + 1
+        elif dec_part_sqrt == 0.0:
+            dim_x = round(sqrt_len_cols)
+            dim_y = round(sqrt_len_cols)
+        else:
+            dim_x = round(sqrt_len_cols)
+            dim_y = round(sqrt_len_cols) + 1
+            
+        fig, axes = plt.subplots(dim_x, dim_y, figsize=(28,26))
         
         count_x = 0
         count_y = 0
         for col in full_stats_df.columns:
-                
-            kdeplot = sns.displot(ax=axes[count_x,count_y],data=full_stats_df, hue='label',x=col,
-                kind="kde", fill=True, legend=True, height=5, aspect=1.6)
             
-            if count_y < 7:
-                count_x += 1
-                count_y = 0
-            else:
+            sns.kdeplot(ax=axes[count_x,count_y], data=full_stats_df,
+                        hue='label', x=col, fill=True)
+            
+            if count_y < (dim_y-1):
                 count_y += 1
+            else:
+                count_y = 0
+                count_x += 1
             
-        plt.savefig("./plots/kde.png")    
+        plt.savefig("./plots/kde.png", dpi=200)    
+        plt.clf()
         
-        """
-        print("Preparing pair plot...")
+        print("Calculating features' correlation to label...")
+        label_corr = {}
+        label_thresh = 0.8
+        while not label_corr:
+            feat_corr, val_corr, label_corr = high_corr_label(full_stats_df, threshold = label_thresh)
+            label_thresh -= 0.3
+        
+        label_corr_df = pd.DataFrame.from_dict(label_corr,orient='index')
+        label_corr_df.to_csv("./plots/label_corr.csv")
+        
+        # get df with only the first five columns
+        feat_list = list(feat_corr[-5::])
+        feat_list.append('label')
+        high_label_corr_df = full_stats_df[feat_list]
+        
         sns.set_style("whitegrid")
-        pairplot = sns.pairplot(full_stats_df, hue="label")
-        plt.savefig('pairplot.png')
-        print("Pair plot saved.")
-        #plt.show()
-        """
-        
-        # max, min, mean, std
+        sns.pairplot(high_label_corr_df, hue="label")
+        plt.savefig('./plots/pairplot.png', dpi=200)
+        plt.clf() 
     
     def mean_image(self):
         
