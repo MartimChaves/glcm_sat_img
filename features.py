@@ -27,22 +27,23 @@ import csv
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
     
-    parser.add_argument('--root', type=str, default='./data/apl_trees/plant-pathology-2021-fgvc8/', help='Directory where files are.')
+    parser.add_argument('--root', type=str, default='./data/xrays/', help='Directory where files are.')
     parser.add_argument('--seed', type=int, default=0, help='Seed for random numbers.')
     
     # Data config
     parser.add_argument('--dataset_split', type=str, default='70,20,10', help='Percentage of dataset allocated to each set (train,val,test).')
+    parser.add_argument('--rgb_imgs', type=str, default='False', help='If true, assume RGB images - else, assume gray images.')
     
     # EDA
     parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
-    parser.add_argument('--eda_rdm_img', type=str, default='False', help='If true, show random images (EDA).')
+    parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
     parser.add_argument('--eda_mean_img', type=str, default='False', help='If true, show class mean image (EDA).')
     parser.add_argument('--mean_img_counter', type=int, default=30, help='Number of imgs to use to calculate class mean.')
     
     parser.add_argument('--eda_eigen_img', type=str, default='False', help='If true, show eigen images (EDA).')
-    parser.add_argument('--eigen_resize_factor', type=int, default=8, help='Resize factor for images used in eigen faces.')
+    parser.add_argument('--eigen_resize_factor', type=int, default=2, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=300, help='Number of imgs to use for eigen faces.')
     
     parser.add_argument('--stats_len', type=int, default=5, help='Resize factor for images used in eigen faces.')
@@ -294,8 +295,23 @@ class Image_Funcs():
 
         plt.show()
         
+    def plt_gray(self, clss_rdm_imgs, lbl_clss, num_imgs):
+        
+        def plot_img(num_imgs,i,img,text):
+            plt.subplot(num_imgs,1,i)
+            plt.imshow(img)
+            plt.title(f"{text} {i}")
+        
+        for counter, file in enumerate(clss_rdm_imgs):
+            img_path = os.path.join(self.imgs_dir,file)
+            img = plt.imread(img_path)
+            
+            plot_img(num_imgs,counter+1,img,f"{lbl_clss}")
+
+        plt.show()
+        
     # *** MEAN IMAGE ***
-    def calc_mean_img(self, path, list_of_filename, size = (2672, 4000, 3)):
+    def calc_mean_img(self, path, list_of_filename, size = (768, 768, 1)):
         # iterating through each file
         flag = False
         counter = 0
@@ -345,11 +361,11 @@ class Image_Funcs():
         return class_mean_img
     
     # *** EIGEN IMAGES **
-    def img2np(self, path, list_of_filename, size = (2672, 4000, 3)):
+    def img2np(self, path, list_of_filename, size = (768, 768, 1)):
         
         # init full list of images array
         res_fac = self.args.eigen_resize_factor
-        a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 334,500
+        a_s = (int(size[0]/res_fac),int(size[1]/res_fac)) # adjusted_size 384,384
         full_mat = np.zeros((self.args.eigen_img_counter,a_s[0]*a_s[1]))
         
         # iterating through each file
@@ -360,7 +376,8 @@ class Image_Funcs():
             img = plt.imread(fp)
             
             if img.shape == size:
-                img = self.rgb2gray(img)
+                if self.args.rgb_imgs == "True":
+                    img = self.rgb2gray(img)
                 # resize image
                 img = cv2.resize(img, dsize=(a_s[1],a_s[0]), interpolation=cv2.INTER_AREA) # INTER_CUBIC if rgb img
                 # turn that into a vector / 1D array
@@ -404,12 +421,21 @@ class DS_aux(Image_Funcs):
     Contains EDA and Dataset split
     """
     def __init__(self, args,
-                 label_code={'healthy':0,
-                             'scab':1,
-                             'frog_eye_leaf_spot':2,
-                             'complex':3,
-                             'rust':4,
-                             'powdery_mildew':5}
+                 label_code={'No_Finding':0,
+                             'Atelectasis':1,
+                             'Cardiomegaly':2,
+                             'Consolidation':3,
+                             'Edema':4,
+                             'Effusion':5,
+                             'Emphysema':6,
+                             'Fibrosis':7,
+                             'Hernia':8,
+                             'Infiltration':9,
+                             'Mass':10,
+                             'Nodule':11,
+                             'Pleural_Thickening':12,
+                             'Pneumonia':13,
+                             'Pneumothorax':14}
                  ):
         super().__init__(args, label_code)
         self.data_split()
@@ -474,7 +500,7 @@ class DS_aux(Image_Funcs):
                 lens.append(len(x))
         order = np.max(lens)
         """
-        stratifier_test = IterativeStratification(n_splits=2, order=3, sample_distribution_per_fold=[testset_fraction, 1-testset_fraction])
+        stratifier_test = IterativeStratification(n_splits=2, order=6, sample_distribution_per_fold=[testset_fraction, 1-testset_fraction])
         train_val_indexes, test_indexes = next(stratifier_test.split(imgs, onehot_labels))
         self.imgs_test, self.labels_test = imgs[test_indexes], onehot_labels[test_indexes]
         
@@ -484,7 +510,7 @@ class DS_aux(Image_Funcs):
         # get stratifier
         sample_distr = [valset_fraction for _ in range(self.num_folds)]
         sample_distr.append(1-np.sum(sample_distr))
-        stratifier_val = IterativeStratification(n_splits=(self.num_folds+1), order=3, sample_distribution_per_fold=sample_distr)
+        stratifier_val = IterativeStratification(n_splits=(self.num_folds+1), order=6, sample_distribution_per_fold=sample_distr)
         # generate folds
         for i in tqdm(range(self.num_folds)):
             train_indexes, val_indexes = next(stratifier_val.split(imgs_train_val, oneh_train_val))
@@ -492,8 +518,8 @@ class DS_aux(Image_Funcs):
                                             'val':imgs_train_val[val_indexes],
                                             'train_labels':oneh_train_val[train_indexes],
                                             'val_labels':oneh_train_val[val_indexes]}
-            
-        """ About 25% of intersection between validation sets of different folds (not great, not terrible)
+
+        """ About 24% of intersection between validation sets of different folds (not great, not terrible)
         intersect = np.intersect1d(self.folds["fold_1"]['val'],self.folds["fold_2"]['val']).shape[0]
         fold_size = self.folds["fold_1"]['val'].shape[0]
         print("Percentage of intersection between different folds val sets: ",round(intersect/fold_size*100,2)) 
@@ -538,13 +564,14 @@ class DS_aux(Image_Funcs):
         labels = self.folds['fold_1']['train_labels']
         imgs = self.folds['fold_1']['train']
         
-        # calculate mean image for all classes
         for lbl_clss, lbl_indx in self.label_code.items():
             clss_imgs = self.get_class_imgs(lbl_indx,imgs,labels)
             clss_rdm_imgs = np.random.choice(clss_imgs,num_imgs,replace=False)
-            self.plt_rgb_channels(clss_rdm_imgs, lbl_clss, num_imgs)
-            stats = self.get_stats(clss_imgs, lbl_clss)
-            # RBG, separate channels, separate HSV, greyscale
+            
+            if self.args.rgb_imgs == "True":
+                self.plt_rgb_channels(clss_rdm_imgs, lbl_clss, num_imgs)
+            else:
+                self.plt_gray(clss_rdm_imgs, lbl_clss, num_imgs)
     
     def metrics_distr(self): # show metrics distributions
         
