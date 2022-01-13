@@ -1,7 +1,7 @@
 ,0
-r_homogeneity,0.21
-g_correlation,0.21
-g_mean,0.23
-h_std,0.26
-s_mean,0.3
-s_homogeneity,0.36
+g_min,0.51
+r_mean,0.52
+h_mean,0.52
+s_mean,0.53
+s_std,0.53
+s_contrast,0.66
