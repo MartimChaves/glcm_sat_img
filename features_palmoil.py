@@ -36,10 +36,9 @@ def parse_args():
     # Data config
     parser.add_argument('--dataset_split', type=str, default='70,20,10', help='Percentage of dataset allocated to each set (train,val,test).')
     parser.add_argument('--rgb_imgs', type=str, default='True', help='If true, assume RGB images - else, assume gray images.')
-    parser.add_argument('--glcm_only', type=str, default='False', help='If true, assume RGB images - else, assume gray images.')
+    parser.add_argument('--glcm_only', type=str, default='True', help='If true, assume RGB images - else, assume gray images.')
     
     # EDA
-    parser.add_argument('--eda', type=str, default='True', help='If true, carry out exploratory data analysis (EDA).')
     parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
     
@@ -68,7 +67,6 @@ class DS_aux(Image_Funcs):
                  ):
         super().__init__(args, label_code)
         self.data_split()
-
     
     def data_split(self):
         
@@ -178,8 +176,11 @@ class DS_aux(Image_Funcs):
             class_feats_df = pd.DataFrame({
                 }).assign(**{col_name:np.concatenate(class_feats_df_raw[col_name].values)
                             for col_name in class_feats_df_raw.columns.tolist()})
-                
-            len_column = len(class_feats['r']['min'])
+            try:                
+                len_column = len(class_feats['r']['min'])
+            except:
+                len_column = len(class_feats['r']['homogeneity'])
+            
             label_arr = np.ones(len_column).astype(np.uint8)*self.label_code[lbl_clss]
             class_feats_df = class_feats_df.assign(label=label_arr)
             
@@ -234,10 +235,8 @@ class DS_aux(Image_Funcs):
         
         print("Calculating features' correlation to label...")
         label_corr = {}
-        label_thresh = 0.8
-        while not label_corr:
-            feat_corr, val_corr, label_corr = high_corr_label(full_stats_df, threshold = label_thresh)
-            label_thresh -= 0.3
+        label_thresh = 0.0
+        feat_corr, val_corr, label_corr = high_corr_label(full_stats_df, threshold = label_thresh)
         
         label_corr_df = pd.DataFrame.from_dict(label_corr,orient='index')
         label_corr_df.to_csv("./plots/label_corr.csv")
@@ -304,63 +303,30 @@ class DS_aux(Image_Funcs):
             full_mat = self.img2np(self.imgs_dir, clss_imgs)
             pca = self.class_eigen_imgs(full_mat)
             self.plot_pca(pca, lbl_clss)
-        
-    def eda(self):
-        # random images
-        if self.args.eda_rdm_img == "True":
-            self.show_rdm_imgs()
-            
-        # average image for each class
-        if self.args.eda_mean_img == "True":
-            self.mean_image()
-
-        # eigenfaces
-        if self.args.eda_eigen_img == "True":
-            self.eigen_imgs()
-
-        if self.args.eda_metrics_distr == "True":
-            self.metrics_distr()
 
 def main(args):
     
     np.random.seed(args.seed)
-    
-    #use cuda 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    torch.backends.cudnn.benchmark = True
-    
-    # dataset generator params
-    params = {'batch_size': 1,
-          'shuffle': True,
-          'num_workers': 2}
-    
+        
     dataset_info = DS_aux(args)
     
-    if args.eda == "True":
-        dataset_info.eda()
+    # plot random images
+    if args.eda_rdm_img == "True":
+        dataset_info.show_rdm_imgs()
+        
+    # average image for each class
+    if args.eda_mean_img == "True":
+        dataset_info.mean_image()
+
+    # eigenimages
+    if args.eda_eigen_img == "True":
+        dataset_info.eigen_imgs()
+
+    # feature distribution
+    if args.eda_metrics_distr == "True":
+        dataset_info.metrics_distr()
     
-    """
-    for i in range(1,dataset_info.num_folds+1):
-        # TO-DO: turn this into a function
-        train_imgs = dataset_info.folds["fold_"+str(i)]['train']
-        train_labels = dataset_info.folds["fold_"+str(i)]['train_labels']
-        train_set = Dataset(args,train_imgs,train_labels)
-        train_gen = torch.utils.data.DataLoader(train_set, **params)
-        
-        val_imgs = dataset_info.folds["fold_"+str(i)]['val']
-        val_labels = dataset_info.folds["fold_"+str(i)]['val_labels']
-        val_set = Dataset(args,val_imgs,val_labels)
-        val_gen = torch.utils.data.DataLoader(val_set, **params)
-        
-        for epoch in range(1):
-            print(f"Training - epoch: {epoch}")
-            for imgs, labels, idxs in tqdm(train_gen):
-                imgs, labels = imgs.to(device), labels.to(device) 
-            
-            print(f"Validating - epoch: {epoch}")
-            for imgs, labels, idxs in tqdm(val_gen):
-                imgs, labels = imgs.to(device), labels.to(device) 
-    """
+    
 if __name__ == "__main__":
     args = parse_args()
     main(args)

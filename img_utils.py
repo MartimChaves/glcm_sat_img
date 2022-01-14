@@ -201,7 +201,11 @@ class Image_Funcs():
         for file in tqdm(clss_imgs):
             
             # get indx of unfilled stat
-            available_indxs = np.where(channel_stats['r']['min']==-1)[0]
+            try:
+                available_indxs = np.where(channel_stats['r']['min']==-1)[0]
+            except:
+                available_indxs = np.where(channel_stats['r']['homogeneity']==-1)[0]
+            
             if not available_indxs.any():
                 break
             stats_indx = np.min(available_indxs)
@@ -280,7 +284,9 @@ class Image_Funcs():
                 channel = img_hsv[..., idx]
                 plot_img(num_imgs, plt_img_counter, channel, f"{hsv[idx]}:{total_img_counter}")
                 plt_img_counter += 1
-        
+
+            total_img_counter += 1
+            
         plt.rcParams.update({'font.size': 8})
         
         #plt.show()
