@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import cv2
 from matplotlib import pyplot as plt
 
 from features_palmoil import DS_aux
@@ -36,43 +37,54 @@ class PalmOilDataset(DS_aux):
                  label_code={'No_OilPalm':0,
                              'Has_OilPalm':1}):
         super().__init__(args,label_code)
+        
+        self.stats_calc = {
+                'r_energy'     : self.get_glcm_metrics,
+                'r_correlation': self.get_glcm_metrics,
+                'r_contrast'   : self.get_glcm_metrics,
+                'r_homogeneity': self.get_glcm_metrics,
+                'g_energy'     : self.get_glcm_metrics,
+                'h_correlation': self.get_glcm_metrics,
+                's_correlation': self.get_glcm_metrics,
+                's_contrast'   : self.get_glcm_metrics
+            }
     
     def norm_features(self):
         
-        # Per-fold normalization
+        self.feats_mean = []
+        self.feats_std = []
         
-        """
-        self.norm_vals_dict = {
-            'fold_1': {
-                'feat_1':[mean, std],
-                'feat_2':[mean, std]
-            },
-            'fold_2': {
-                'feat_1':[mean,std],
-                ...
-            },
-            ...
-        }
+        for i in range(self.train[0].shape[0]): #number of features
+            feat_mean = np.mean(self.train[...,i])
+            feat_std = np.std(self.train[...,i])
+            
+            self.train[0::][0] = self.train[...,i] - feat_mean
+            self.train[0::][0] = self.train[...,i] / feat_std
+            
+            self.val[0::][0] = self.train[...,i] - feat_mean
+            self.val[0::][0] = self.train[...,i] / feat_std
+            
+            self.feats_mean.append(feat_mean) # save in case it's needed for testset
+            self.feats_std.append(feat_std)
         
-        # test set is normalized with the fold that has the best metrics
-        
-        """
-        pass
     
     def calculate_features(self, img):
-        
-        stats_calc = {
-                'r_energy'     : np.min,
-                'r_correlation': np.max,
-                'r_contrast'   : np.mean,
-                'r_homogeneity': np.std,
-                's_correlation': self.get_glcm_metrics,
-                'g_energy'     : self.get_glcm_metrics,
-                'h_correlation': self.get_glcm_metrics,
-                's_contrast'   : self.get_glcm_metrics
-            }
-        
         features = np.zeros((8))
+        
+        img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        
+        glcm_dict = {
+            'r':self.get_glcm(img[...,0]),
+            'g':self.get_glcm(img[...,1]),
+            'h':self.get_glcm(img_hsv[...,0]),
+            's':self.get_glcm(img_hsv[...,1])
+        }
+        
+        for idx, (stat, calc_func) in enumerate(self.stats_calc.items()):
+            channel = stat[0]
+            channel_glcm = glcm_dict[channel]
+            feat_val = calc_func(stat[2::],glcm=channel_glcm)
+            features[idx] = feat_val
         
         return features
     
@@ -87,45 +99,28 @@ class PalmOilDataset(DS_aux):
             init_set_feats[idx] = img_feats
         return init_set_feats
     
-    def generate_features(self):
-        # similar to img_utils func but to all of the imgs
+    def generate_features(self, fold):
+        fold_info = self.folds[fold]
         
-        fold_features = {}
-        
-        for fold, fold_info in self.folds.items():
+        init_train_feats = np.zeros((len(fold_info['train']),8)) # 8 features were chosen
+        init_val_feats = np.zeros((len(fold_info['val']),8))
 
-            fold_features[fold] = {}
-            
-            init_train_feats = np.zeros((len(fold_info['train']),8)) # 8 features were chosen
-            init_val_feats = np.zeros((len(fold_info['val']),8))
-
-            print(f"Calculating train set features for {fold}")
-            init_train_feats = self.calc_set_feats(fold_info['train'], init_train_feats)
-            
-            print(f"Calculating validation set features for {fold}")
-            init_val_feats = self.calc_set_feats(fold_info['val'], init_val_feats)
-            
-            fold_features[fold]['train'] = init_train_feats
-            fold_features[fold]['val'] = init_val_feats
-            fold_features[fold]['train_labels'] = fold_info['train_labels']
-            fold_features[fold]['val_labels'] = fold_info['val_labels']
+        print(f"Calculating train set features for {fold}")
+        init_train_feats = self.calc_set_feats(fold_info['train'], init_train_feats)
         
+        print(f"Calculating validation set features for {fold}")
+        init_val_feats = self.calc_set_feats(fold_info['val'], init_val_feats)
         
-        # similar to dataset split, but instead of img file, img features
-        # feat_vals = {
-            # 'fold_1' :
-        # }
+        self.train = init_train_feats
+        self.val = init_val_feats
+        self.train_labels = fold_info['train_labels']
+        self.val_labels = fold_info['val_labels']
         
-        
-        pass
-    
-    
-    
+        self.norm_features()
     
 def main(args):
     dataset = PalmOilDataset(args)
-    dataset.generate_features()
-    
+    dataset.generate_features('fold_1')
 
 if __name__ == "__main__":
     args = parse_args()
