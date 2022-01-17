@@ -7,16 +7,9 @@ from features_palmoil import DS_aux
 
 import argparse
 from tqdm import tqdm
-"""
-r_energy	0.21
-r_correlation	0.25
-r_contrast	0.28
-r_homogeneity	0.34
-s_correlation	0.38
-g_energy	0.4
-h_correlation	0.41
-s_contrast	0.66
-"""
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import balanced_accuracy_score
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -58,11 +51,11 @@ class PalmOilDataset(DS_aux):
             feat_mean = np.mean(self.train[...,i])
             feat_std = np.std(self.train[...,i])
             
-            self.train[0::][0] = self.train[...,i] - feat_mean
-            self.train[0::][0] = self.train[...,i] / feat_std
+            self.train[...,i] = self.train[...,i] - feat_mean
+            self.train[...,i] = self.train[...,i] / feat_std
             
-            self.val[0::][0] = self.train[...,i] - feat_mean
-            self.val[0::][0] = self.train[...,i] / feat_std
+            self.val[...,i] = self.val[...,i] - feat_mean
+            self.val[...,i] = self.val[...,i] / feat_std
             
             self.feats_mean.append(feat_mean) # save in case it's needed for testset
             self.feats_std.append(feat_std)
@@ -117,11 +110,29 @@ class PalmOilDataset(DS_aux):
         self.val_labels = fold_info['val_labels']
         
         self.norm_features()
-    
+
+    def calc_clss_weights(self):
+        weight_dict = {}
+        total_num_samples = len(self.train_labels) 
+        for clss_lbl, clss_val in self.label_code.items():
+            clss_num_samples = len(np.where(self.train_labels == clss_val)[0])
+            weight_dict[clss_val] = 1 - (clss_num_samples/total_num_samples)
+        return weight_dict
+
 def main(args):
     dataset = PalmOilDataset(args)
+    print("Generating dataset...")
     dataset.generate_features('fold_1')
-
+    print("Dataset generated...")
+    
+    weight_dict = dataset.calc_clss_weights()
+    
+    clf = RandomForestClassifier(max_depth=2, class_weight=weight_dict, random_state=args.seed)
+    clf.fit(dataset.train, dataset.train_labels)
+    
+    val_preds = clf.predict(dataset.val)
+    bal_acc = balanced_accuracy_score(dataset.val_labels, val_preds)
+    print(f"Balanced accuracy:{bal_acc}")
 if __name__ == "__main__":
     args = parse_args()
     main(args)
