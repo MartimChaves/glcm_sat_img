@@ -9,6 +9,7 @@ import argparse
 from tqdm import tqdm
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
 
 def parse_args():
@@ -127,12 +128,32 @@ def main(args):
     
     weight_dict = dataset.calc_clss_weights()
     
-    clf = RandomForestClassifier(max_depth=2, class_weight=weight_dict, random_state=args.seed)
-    clf.fit(dataset.train, dataset.train_labels)
+    classifiers_dict = {
+        'random_forest': {
+            'model': RandomForestClassifier,
+            'model_args': {'max_depth':2,'class_weight':weight_dict,'random_state':args.seed},
+            'val_preds': 0,
+            'bal_acc': 0
+        },
+        'log_reg': {
+            'model': LogisticRegression,
+            'model_args': {'class_weight':weight_dict,'random_state':args.seed},
+            'val_preds': 0,
+            'bal_acc': 0
+        }
+    }
     
-    val_preds = clf.predict(dataset.val)
-    bal_acc = balanced_accuracy_score(dataset.val_labels, val_preds)
-    print(f"Balanced accuracy:{bal_acc}")
+    for clssfier_name, classifier in classifiers_dict.items():
+        clf = classifier['model'](**classifier['model_args'])
+        clf.fit(dataset.train, dataset.train_labels)
+        
+        classifier['val_preds'] = clf.predict(dataset.val)
+        classifier['bal_acc'] = balanced_accuracy_score(dataset.val_labels, classifier['val_preds'])
+        print(f"Balanced accuracy {clssfier_name}:{classifier['bal_acc']}")
+    
+    # balanced accuracy
+    
 if __name__ == "__main__":
     args = parse_args()
     main(args)
+    
