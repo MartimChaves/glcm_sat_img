@@ -8,9 +8,14 @@ from features_palmoil import DS_aux
 import argparse
 from tqdm import tqdm
 
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import balanced_accuracy_score
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.dummy import DummyClassifier
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score
+
+from timeit import default_timer as timer
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -133,23 +138,69 @@ def main(args):
             'model': RandomForestClassifier,
             'model_args': {'max_depth':2,'class_weight':weight_dict,'random_state':args.seed},
             'val_preds': 0,
-            'bal_acc': 0
+            'bal_acc': [],
+            'auc': []
         },
         'log_reg': {
             'model': LogisticRegression,
             'model_args': {'class_weight':weight_dict,'random_state':args.seed},
             'val_preds': 0,
-            'bal_acc': 0
+            'bal_acc': [],
+            'auc': []
+        },
+        'gradient_boost': {
+            'model': GradientBoostingClassifier,
+            'model_args': {'random_state':args.seed},
+            'val_preds': 0,
+            'bal_acc': [],
+            'auc': []
+        },
+        'svm': {
+            'model': SVC,
+            'model_args': {'probability':True,'class_weight':weight_dict,'random_state':args.seed},
+            'val_preds': 0,
+            'bal_acc': [],
+            'auc': []
+        },
+        'knn': {
+            'model': KNeighborsClassifier,
+            'model_args': {'n_neighbors':3},
+            'val_preds': 0,
+            'bal_acc': [],
+            'auc': []
+        },
+        'dummy': {
+            'model': DummyClassifier,
+            'model_args': {'strategy':"most_frequent",'random_state':args.seed},
+            'val_preds': 0,
+            'bal_acc': [],
+            'auc': []
         }
     }
     
+    print("Training classifiers...")
     for clssfier_name, classifier in classifiers_dict.items():
+        print(f"******************{clssfier_name}********************")
         clf = classifier['model'](**classifier['model_args'])
+        
+        start = timer()
         clf.fit(dataset.train, dataset.train_labels)
+        end = timer()
+        time_elapsed = end-start
+        print(f"Time elapsed for {clssfier_name}:{round(time_elapsed,2)}s")
         
         classifier['val_preds'] = clf.predict(dataset.val)
-        classifier['bal_acc'] = balanced_accuracy_score(dataset.val_labels, classifier['val_preds'])
-        print(f"Balanced accuracy {clssfier_name}:{classifier['bal_acc']}")
+        bal_acc_val = round(balanced_accuracy_score(dataset.val_labels, classifier['val_preds'])*100,2)
+        classifier['bal_acc'].append(bal_acc_val)
+        print(f"Balanced accuracy {clssfier_name}:{bal_acc_val}%")
+        
+        raw_probs = clf.predict_proba(dataset.val)
+        auc = roc_auc_score(dataset.val_labels, raw_probs[:, 1])
+        classifier['auc'].append(auc)
+        print(f"AUC {clssfier_name}:{round(auc,5)}")
+        
+        # f1-score
+        
     
     # balanced accuracy
     
