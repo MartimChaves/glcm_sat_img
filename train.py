@@ -39,6 +39,27 @@ def main(args):
     
     print(f"Best parameters for classifier:{grid_clf.best_params_}")
     
+    for idx, param_dicst in enumerate(grid_clf.cv_results_['params']):
+        if param_dicst == {'n_neighbors': 5, 'p': 2, 'weights': 'uniform'}: #default kk
+            default_indx = idx
+        elif param_dicst == {'n_neighbors': 3, 'p': 2, 'weights': 'uniform'}:
+            itial_params_indx = idx
+        elif param_dicst == grid_clf.best_params_:
+            best_params_indx = idx
+        else:
+            continue
+        
+    deafult_f1_score = round(grid_clf.cv_results_['mean_test_score'][default_indx]*100,2)
+    itial_params_f1_score = round(grid_clf.cv_results_['mean_test_score'][itial_params_indx]*100,2)
+    best_params_f1_score = round(grid_clf.cv_results_['mean_test_score'][best_params_indx]*100,2)
+    
+    csv_params_dict = {'deafult_f1_score':[deafult_f1_score],
+                       'itial_params_f1_score':[itial_params_f1_score],
+                       'best_params_f1_score':[best_params_f1_score]}
+    
+    csv_params_df = pd.DataFrame.from_dict(csv_params_dict)
+    csv_params_df.to_csv("./plots/params_scores.csv")
+    
     dataset.gen_test_set()
     
     pred_test_labels = grid_clf.predict(dataset.test)
@@ -70,7 +91,7 @@ def main(args):
     df_cm = pd.DataFrame(confmatrix, range(cmat_size), range(cmat_size))
     fig = plt.figure(figsize=(10,7))
     sns.set(font_scale=1.4) # for label size
-    sns.heatmap(df_cm, annot=True, annot_kws={"size": 16}, cmap="gray",linewidths=0.1, linecolor='gray') # font size
+    sns.heatmap(df_cm, annot=True, annot_kws={"size": 16}, cmap="gray",linewidths=0.1, linecolor='gray', fmt='d') # font size
     
     plt.xlabel('Predictions')
     plt.ylabel('Labels')
