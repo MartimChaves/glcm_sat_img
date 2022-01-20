@@ -1,21 +1,13 @@
 import numpy as np
-import os
-import cv2
-from matplotlib import pyplot as plt
-
-from features_palmoil import DS_aux
-
+import pandas as pd
 import argparse
-from tqdm import tqdm
-
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from palm_oil_ds import PalmOilDataset
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.dummy import DummyClassifier
-from sklearn.metrics import balanced_accuracy_score, roc_auc_score, f1_score
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score, f1_score, roc_curve, confusion_matrix
+from sklearn.model_selection import GridSearchCV
 
-from timeit import default_timer as timer
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
@@ -29,224 +21,62 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
-class PalmOilDataset(DS_aux):
-    
-    def __init__(self, args,
-                 label_code={'No_OilPalm':0,
-                             'Has_OilPalm':1}):
-        super().__init__(args,label_code)
-        
-        self.stats_calc = {
-                'r_energy'     : self.get_glcm_metrics,
-                'r_correlation': self.get_glcm_metrics,
-                'r_contrast'   : self.get_glcm_metrics,
-                'r_homogeneity': self.get_glcm_metrics,
-                'g_energy'     : self.get_glcm_metrics,
-                'h_correlation': self.get_glcm_metrics,
-                's_correlation': self.get_glcm_metrics,
-                's_contrast'   : self.get_glcm_metrics
-            }
-    
-    def norm_features(self):
-        
-        self.feats_mean = []
-        self.feats_std = []
-        
-        for i in range(self.train[0].shape[0]): #number of features
-            feat_mean = np.mean(self.train[...,i])
-            feat_std = np.std(self.train[...,i])
-            
-            self.train[...,i] = self.train[...,i] - feat_mean
-            self.train[...,i] = self.train[...,i] / feat_std
-            
-            self.val[...,i] = self.val[...,i] - feat_mean
-            self.val[...,i] = self.val[...,i] / feat_std
-            
-            self.feats_mean.append(feat_mean) # save in case it's needed for testset
-            self.feats_std.append(feat_std)
-        
-    
-    def calculate_features(self, img):
-        features = np.zeros((8))
-        
-        img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        
-        glcm_dict = {
-            'r':self.get_glcm(img[...,0]),
-            'g':self.get_glcm(img[...,1]),
-            'h':self.get_glcm(img_hsv[...,0]),
-            's':self.get_glcm(img_hsv[...,1])
-        }
-        
-        for idx, (stat, calc_func) in enumerate(self.stats_calc.items()):
-            channel = stat[0]
-            channel_glcm = glcm_dict[channel]
-            feat_val = calc_func(stat[2::],glcm=channel_glcm)
-            features[idx] = feat_val
-        
-        return features
-    
-    def calc_set_feats(self, img_files, init_set_feats):
-        """
-        Read images, calculate features, store it in array, return array
-        """
-        for idx, img_file in enumerate(tqdm(img_files)):
-            img_path = os.path.join(self.imgs_dir,img_file)
-            img = plt.imread(img_path)
-            img_feats = self.calculate_features(img)
-            init_set_feats[idx] = img_feats
-        return init_set_feats
-    
-    def generate_features(self, fold):
-        fold_info = self.folds[fold]
-        
-        init_train_feats = np.zeros((len(fold_info['train']),8)) # 8 features were chosen
-        init_val_feats = np.zeros((len(fold_info['val']),8))
-
-        print(f"Calculating train set features for {fold}")
-        init_train_feats = self.calc_set_feats(fold_info['train'], init_train_feats)
-        
-        print(f"Calculating validation set features for {fold}")
-        init_val_feats = self.calc_set_feats(fold_info['val'], init_val_feats)
-        
-        self.train = init_train_feats
-        self.val = init_val_feats
-        self.train_labels = fold_info['train_labels']
-        self.val_labels = fold_info['val_labels']
-        
-        self.norm_features()
-
-    def calc_clss_weights(self):
-        weight_dict = {}
-        total_num_samples = len(self.train_labels) 
-        for clss_lbl, clss_val in self.label_code.items():
-            clss_num_samples = len(np.where(self.train_labels == clss_val)[0])
-            weight_dict[clss_val] = 1 - (clss_num_samples/total_num_samples)
-        return weight_dict
-
 def main(args):
     dataset = PalmOilDataset(args)
-    metrics_used = ['bal_acc','auc','f1']
+    dataset.generate_features('fold_1', gen_full_data=True)
     
-    weight_dict = 0 # to be determined
-    classifiers_dict = {
-        'random_forest': {
-            'model': RandomForestClassifier,
-            'model_args': {'max_depth':2,'class_weight':weight_dict,'random_state':args.seed}
-        },
-        'log_reg': {
-            'model': LogisticRegression,
-            'model_args': {'class_weight':weight_dict,'random_state':args.seed}
-        },
-        'gradient_boost': {
-            'model': GradientBoostingClassifier,
-            'model_args': {'random_state':args.seed}
-        },
-        'svm': {
-            'model': SVC,
-            'model_args': {'probability':True,'class_weight':weight_dict,'random_state':args.seed}
-        },
-        'knn': {
-            'model': KNeighborsClassifier,
-            'model_args': {'n_neighbors':3}
-        },
-        'dummy': {
-            'model': DummyClassifier,
-            'model_args': {'strategy':"most_frequent",'random_state':args.seed}
-        }
-    }
+    print("Determining best hyper-parameters for classifier...")
+    clf = KNeighborsClassifier()
+    parameters = {'weights':('uniform', 'distance'), 'n_neighbors':[3, 5], 'p':[1,2]}
     
-    for _, classifier in classifiers_dict.items():
-        for metric in metrics_used:
-            classifier[metric] = []
+    grid_kwargs = {'scoring':'f1',
+                   'n_jobs':-1,
+                   'cv':dataset.num_folds,
+                   'refit':True}
     
-    print("Training classifiers...")
-    for i in range(dataset.num_folds):
-        print("Generating dataset...")
-        dataset.generate_features(f'fold_{i+1}')
-        print("Dataset generated...")
-        weight_dict = dataset.calc_clss_weights()
-        
-        for clssfier_name, classifier in classifiers_dict.items():
-            print(f"****************** Fold {i+1} - {clssfier_name} ********************")
-            
-            if 'class_weight' in classifier['model_args']:
-                classifier['model_args']['class_weight'] = weight_dict
-            
-            clf = classifier['model'](**classifier['model_args'])
-            
-            start = timer()
-            clf.fit(dataset.train, dataset.train_labels)
-            end = timer()
-            time_elapsed = end-start
-            print(f"Time elapsed for {clssfier_name}:{round(time_elapsed,2)}s")
-            
-            # validation set predictions
-            pred_val_labels = clf.predict(dataset.val)
-            raw_probs = clf.predict_proba(dataset.val)[:, 1]
-            
-            bal_acc_val = round(balanced_accuracy_score(dataset.val_labels, pred_val_labels)*100,2)
-            classifier['bal_acc'].append(bal_acc_val)
-            print(f"Balanced accuracy {clssfier_name}:{bal_acc_val}%")
-            
-            auc = round(roc_auc_score(dataset.val_labels, raw_probs)*100,2)
-            classifier['auc'].append(auc)
-            print(f"AUC {clssfier_name}:{auc}")
-            
-            f1 = round(f1_score(dataset.val_labels, pred_val_labels, average='binary')*100,2)
-            classifier['f1'].append(f1)
-            print(f"F1-score {clssfier_name}:{f1}")
+    grid_clf = GridSearchCV(clf, parameters, **grid_kwargs)
+    grid_clf.fit(dataset.full_data, dataset.full_data_labels)
     
+    print(f"Best parameters for classifier:{grid_clf.best_params_}")
     
-    print(f"######## Metrics ########")
-    score_dicts = {}
-    for metric in metrics_used:
-        score_dicts[metric] = [[],[]] # score and error
-    for clssfier_name, classifier in classifiers_dict.items():
-        print(f"****************** {clssfier_name} ********************")
-        for metric in metrics_used:
-            mean = np.mean(classifier[metric])
-            std = round(np.std(classifier[metric]),4)
-            
-            score_dicts[metric][0].append(mean)
-            score_dicts[metric][1].append(std)
-            
-            print(f"* {metric}: mean = {mean}; std = {std}")
+    dataset.gen_test_set()
     
-    y = np.array(score_dicts['bal_acc'][0][0:-1])
-    e = np.array(score_dicts['bal_acc'][1][0:-1])
-
-    y_2 = np.array(score_dicts['auc'][0][0:-1])
-    e_2 = np.array(score_dicts['auc'][1][0:-1])
-
-    y_3 = np.array(score_dicts['f1'][0][0:-1])
-    e_3 = np.array(score_dicts['f1'][1][0:-1])
-
-    N = 5
-    ind = np.arange(N)  # the x locations for the groups
-    width = 0.4       # the width of the bars
-
-    fig = plt.figure(figsize = (8,6))
-    ax = fig.add_subplot(111)
-
-    style_kwargs = {'linestyle':'None', 'capsize':4, 'ecolor':'#D81B60', 'fmt':'o', 'markersize':6, 'elinewidth':0.8}
-
-    errplot_1 = ax.errorbar(ind, y, e, color='#1E88E5',**style_kwargs)
-    errplot_2 = ax.errorbar(ind+(width/2), y_2, e_2, color='#FFC107',**style_kwargs)
-    errplot_3 = ax.errorbar(ind+width, y_3, e_3, color='#004D40',**style_kwargs)
-
-    ax.set_ylabel('Scores', fontsize=15)
-    ax.set_title('Metric Scores for Different Classifiers', fontsize=20, pad=17)
-    ax.set_xticks(ind + width / 2)
-    ax.set_xticklabels( ('Random \n Forests', 'Logistic \n Regression', 'Gradient \n Boosting', 'SVM', 'KNN') )
-
-    ax.legend( (errplot_1[0], errplot_2[0], errplot_3[0]), ('Balanced Accuracy', 'AUC', 'F1-Score') )
+    pred_test_labels = grid_clf.predict(dataset.test)
+    raw_probs = grid_clf.predict_proba(dataset.test)[:, 1]
+    
+    auc = round(roc_auc_score(dataset.test_labels, raw_probs)*100,2)
+    fpr, tpr, _ = roc_curve(dataset.test_labels, raw_probs)
+    
+    bal_acc_test = round(balanced_accuracy_score(dataset.test_labels, pred_test_labels)*100,2)
+    f1 = round(f1_score(dataset.test_labels, pred_test_labels, average='binary')*100,2)
+    
+    plt.figure()
+    plt.plot(fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (area = {auc})")
+    plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
     plt.grid(color = 'gray', linestyle = '--', linewidth = 0.5)
-
-    plt.savefig("classifier_metrics.png",dpi=200)
+    
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.02])
+    
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("Receiver operating characteristic curve - Sat images")
+    plt.legend(loc="lower right")
+    plt.savefig("./plots/roc.png")
+    plt.clf()
+    
+    confmatrix = confusion_matrix(dataset.test_labels,pred_test_labels)
+    cmat_size = len(confmatrix)
+    df_cm = pd.DataFrame(confmatrix, range(cmat_size), range(cmat_size))
+    fig = plt.figure(figsize=(10,7))
+    sns.set(font_scale=1.4) # for label size
+    sns.heatmap(df_cm, annot=True, annot_kws={"size": 16}, cmap="gray",linewidths=0.1, linecolor='gray') # font size
+    
+    plt.xlabel('Predictions')
+    plt.ylabel('Labels')
+    plt.title('Test Set Confusion Matrix')
+    fig.savefig(f'./plots/f1_{f1}_bal_acc_{bal_acc_test}_confmat_test.png', dpi = 150)
     
 if __name__ == "__main__":
     args = parse_args()
     main(args)
-    

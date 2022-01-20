@@ -98,7 +98,7 @@ class DS_aux(Image_Funcs):
         imgs, labels = shuffle(imgs, labels, random_state=self.args.seed)
         
         imgs_train_val, self.imgs_test, labels_train_val,\
-        self.labels_test = train_test_split(imgs, labels, test_size=testset_fraction,
+        self.test_labels = train_test_split(imgs, labels, test_size=testset_fraction,
                                             random_state=self.args.seed, stratify=labels)
         
         valset_fraction = round(valset_fraction/(1-testset_fraction),2) # adapted after testset removal
