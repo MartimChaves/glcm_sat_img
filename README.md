@@ -43,9 +43,9 @@ There may be some unecessary libarires... **After this you should have a working
 
 Afterward, you need to add the data directory. A directory could look like this:
 
-> ./data/\[dataset_name]/\[train_images]/...
+> ./data/\[dataset_name]/\train_images/...
 
-> ./data/\[dataset_name]/\[train.csv]
+> ./data/\[dataset_name]/\train.csv
 
 In the first directory, the *train_images* one, you should have **all of your images** in a format that can be read by matplotlib.pyplot.imread(). The names of the images are not relevant.
 
