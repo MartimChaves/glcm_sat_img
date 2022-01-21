@@ -1,6 +1,6 @@
 # Oil Palm Plantations Satellite Images Classification using GLCMs
 ## Short Description
-This project came about when I was writing a blogpost on Gray Level Co-variance Matrices (you can find it [here](https://medium.com/@mgrc99/glcms-a-great-tool-for-your-ml-arsenal-7a59f1e45b65)!). I wanted to demonstrate that ***GLCMs were an interesting method for image analysis***.
+This project came about when I was writing a blogpost on Gray Level Co-variance Matrices - you can find it [here](https://medium.com/@mgrc99/glcms-a-great-tool-for-your-ml-arsenal-7a59f1e45b65). I wanted to demonstrate that ***GLCMs were an interesting method for image analysis***.
 
 The majority of the code here is dedicated to **extracting features from a dataset** and using them to **predict their class** using a **classifier**. That dataset is the one provided by the Women in Data Science (WiDS) Datathon 2019, which can be found [here](https://www.kaggle.com/c/widsdatathon2019/data).
 
