@@ -18,7 +18,7 @@ mnt_ev_g = np.average(mnt_ev,axis=2).astype(np.uint8)
 sea_g = np.average(sea,axis=2).astype(np.uint8)
 if verbose: print("Images converted")
 
-finl_img = mnt_ev_g
+finl_img = sea_g
 
 # choose a positional operator
 pos_op = [1,0]
@@ -40,7 +40,7 @@ for i in range(finl_img.shape[0]): # row
 glcm = glcm/np.sum(glcm)
 
 if verbose: print("Plotting image")
-imgplot = plt.imshow(np.log(glcm+1e-6))
+imgplot = plt.imshow(np.log(glcm+1e-6), cmap='gray')
 plt.show()
 
 is_symmetric = False
