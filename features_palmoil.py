@@ -35,8 +35,8 @@ def parse_args():
     
     # Data config
     parser.add_argument('--dataset_split', type=str, default='70,20,10', help='Percentage of dataset allocated to each set (train,val,test).')
-    parser.add_argument('--rgb_imgs', type=str, default='True', help='If true, assume RGB images - else, assume gray images.')
-    parser.add_argument('--glcm_only', type=str, default='True', help='If true, assume RGB images - else, assume gray images.')
+    parser.add_argument('--rgb_imgs', type=str, default='True', help='If true, assume RGB images - else, assume gray images (TBA).')
+    parser.add_argument('--glcm_only', type=str, default='True', help='If true, use only GLCM features.')
     
     # EDA
     parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
