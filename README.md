@@ -1,6 +1,6 @@
 # Oil Palm Plantations Satellite Images Classification using GLCMs
 ## Short Description
-This project came about when I was writing a blogpost on Gray Level Co-variance Matrices (you can find it [here]()!). I wanted to demonstrate that ***GLCMs were an interesting method for image analysis***.
+This project came about when I was writing a blogpost on Gray Level Co-variance Matrices (you can find it [here](https://medium.com/@mgrc99/glcms-a-great-tool-for-your-ml-arsenal-7a59f1e45b65)!). I wanted to demonstrate that ***GLCMs were an interesting method for image analysis***.
 
 The majority of the code here is dedicated to **extracting features from a dataset** and using them to **predict their class** using a **classifier**. That dataset is the one provided by the Women in Data Science (WiDS) Datathon 2019, which can be found [here](https://www.kaggle.com/c/widsdatathon2019/data).
 
@@ -99,7 +99,7 @@ Currently, this should only work for RGB images. According to the arguments that
 
 After doing EDA, you should have **some ideas on which features are best**. To change the features that you want to use you have to change the code manually (something to improve later on). 
 
-Go over to the *palm_oil_ds.py* file and in the constructor of the dataset class *add or remove* the features that you want following theis naming scheme:
+Go over to the *palm_oil_ds.py* file and in the constructor of the dataset class *add or remove* the features that you want following this naming scheme:
 
 - **"c_measure"**, where 'c' is the channel (r, g, b, g, h, s, v) you want, and 'measure' is the measure you want ('homogeneity', 'energy', 'contrast', 'correlation')²
 
@@ -139,10 +139,10 @@ There's a lot of future work for this file. For example, it would be great to im
 
 I would say that this project is very easily adaptable to other datasets - you simply have to parse in the right data root when running each file. 
 
-However, the *mean_img* and *eigen_img* method of the *DS_aux* class will not work without changing the code directly - there are some image sizes that have to be manually changed (to be improved in the future), so you might want to parse those args as "False". There may be some other locations where you might have to change the code, but it should be easy enough. The remaining code should work (if not, shoot me a message!).
+However, the *mean_img* and *eigen_img* method of the *DS_aux* class will not work without changing the code directly - there are some image sizes that have to be manually changed (to be improved in the future), so you might want to parse those args as "False" (--eda_mean_img and --eda_eigen_img). There may be some other locations where you might have to change the code, but it should be easy enough. The remaining code should work (if not, shoot me a message!).
 
 ### Contact and Questions
 
 If you have any question, feel free to ask at: mgrc99@gmail.com
 
-If this helped you in any way, consider liking my [medium post]()! Thank you!
+If this helped you in any way, consider liking my [medium post](https://medium.com/@mgrc99/glcms-a-great-tool-for-your-ml-arsenal-7a59f1e45b65)! Thank you!
