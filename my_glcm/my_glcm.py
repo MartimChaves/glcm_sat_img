@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
-import copy
+from tqdm import tqdm
 
 verbose = True
 
@@ -8,17 +8,25 @@ verbose = True
 # mount everest: https://artsandculture.google.com/story/kAWhL0aq-oU_-Q
 # sea: https://www.istockphoto.com/pt/foto/blue-sea-water-background-atlantic-gm1136870172-302935743
 if verbose: print("Loading images...")
-mnt_ev = plt.imread("mounteverest.jpg")
-sea = plt.imread("sea.jpg")
+sky = plt.imread("pexels-kasia-palitava-10812242.jpg")
+umbrella = plt.imread("pexels-parviz-besharat-pur-8566320.jpg") #александр
 if verbose: print("Images loaded")
 
 # get img grey lvl
 if verbose: print("Converting RGB imgs to grey lvl (8bit)")
-mnt_ev_g = np.average(mnt_ev,axis=2).astype(np.uint8)
-sea_g = np.average(sea,axis=2).astype(np.uint8)
+sky_g = np.average(sky,axis=2).astype(np.uint8)
+umbrella_g = np.average(umbrella,axis=2).astype(np.uint8)
 if verbose: print("Images converted")
 
-finl_img = sea_g
+log_img = True
+finl_img = umbrella_g
+img_name = 'umbrella'
+glcm_name = 'umbrella_glcm'
+
+plt.imshow(finl_img, cmap='gray')
+plt.axis('off')
+plt.savefig(f'{img_name}.png',bbox_inches='tight',pad_inches = 0)
+plt.clf()
 
 # choose a positional operator
 pos_op = [1,0]
@@ -28,7 +36,7 @@ glcm = np.zeros([256,256])
 
 # iterate over image and complete glcm
 if verbose: print("Calculating GLCM")
-for i in range(finl_img.shape[0]): # row
+for i in tqdm(range(finl_img.shape[0])): # row
     for j in range(finl_img.shape[1]): # col
         init_val = finl_img[i,j]
         try:
@@ -39,10 +47,19 @@ for i in range(finl_img.shape[0]): # row
         
 glcm = glcm/np.sum(glcm)
 
-if verbose: print("Plotting image")
-imgplot = plt.imshow(np.log(glcm+1e-6), cmap='gray')
-plt.show()
 
+if verbose: print("Plotting image")
+if log_img:
+    imgplot = plt.imshow(np.log(glcm+1e-6), cmap='gray')
+    plt.axis('off')
+    plt.savefig(f'{glcm_name}.png',bbox_inches='tight',pad_inches = 0)
+    plt.clf()
+else:
+    imgplot = plt.imshow(glcm, cmap='gray')
+    plt.axis('off')
+    plt.savefig(f'{glcm_name}.png',bbox_inches='tight',pad_inches = 0)
+    plt.clf()
+    
 is_symmetric = False
 if is_symmetric:
     test_glcm = np.copy(glcm)
