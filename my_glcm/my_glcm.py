@@ -41,7 +41,7 @@ for i in tqdm(range(finl_img.shape[0])): # row
         init_val = finl_img[i,j]
         try:
             target = finl_img[i+pos_op[0],j+pos_op[1]]
-        except:
+        except IndexError:
             continue # out of img bounds
         glcm[init_val,target]+=1
         
