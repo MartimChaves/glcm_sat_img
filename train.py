@@ -9,6 +9,8 @@ from sklearn.model_selection import GridSearchCV
 from matplotlib import pyplot as plt
 import seaborn as sns
 
+from pickle import dump
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
     
@@ -97,6 +99,10 @@ def main(args):
     plt.ylabel('Labels')
     plt.title('Test Set Confusion Matrix')
     fig.savefig(f'./plots/f1_{f1}_bal_acc_{bal_acc_test}_confmat_test.png', dpi = 150)
+    
+    # save model to pickle file
+    with open("./model_weights/clf.bin","wb") as f:
+        dump(grid_clf, f)
     
 if __name__ == "__main__":
     args = parse_args()
