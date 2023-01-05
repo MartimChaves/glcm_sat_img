@@ -63,6 +63,13 @@ Of the WiDS Datathon 2019 data, I only used the **train data for simplicity**.
 
 Quick side note: I noticed that the *image names* in the *traininglabels.csv* file had a 2017 at the end of them. **Instead of img_00001.jpg, it was img_000012017.jpg**, which took me more time to understand than what I would like to admit... So I just read that csv file, removed the '2017' before the '.jpg' and saved it.
 
+Here are complete instructions to use the WiDS Datathon 2019 data without issues.
+1. Download the data from the [Kaggle competition](https://www.kaggle.com/c/widsdatathon2019)
+2. Extract the files from the folder
+3. In the `.\data\` directory create a new folder (I called it `widsfixed`)
+4. From the `widsdatathon2019` folder, copy the `train_images` folder (might be inside another folder called `train_images` as well)  and the `traininglabels.csv` file into the `widsfixed` folder
+4. Inside the `widsfixed` directory, run the `create_labels_csv.py` script
+
 **Now you should have some solid data, ready to be used.**
 
 ### 3. Carry out EDA (optional, but highly recommended)
