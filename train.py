@@ -44,12 +44,10 @@ def main(args):
     for idx, param_dicst in enumerate(grid_clf.cv_results_['params']):
         if param_dicst == {'n_neighbors': 5, 'p': 2, 'weights': 'uniform'}: #default kk
             default_indx = idx
-        elif param_dicst == {'n_neighbors': 3, 'p': 2, 'weights': 'uniform'}:
+        if param_dicst == {'n_neighbors': 3, 'p': 2, 'weights': 'uniform'}:
             itial_params_indx = idx
-        elif param_dicst == grid_clf.best_params_:
+        if param_dicst == grid_clf.best_params_:
             best_params_indx = idx
-        else:
-            continue
         
     deafult_f1_score = round(grid_clf.cv_results_['mean_test_score'][default_indx]*100,2)
     itial_params_f1_score = round(grid_clf.cv_results_['mean_test_score'][itial_params_indx]*100,2)

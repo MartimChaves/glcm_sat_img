@@ -11,7 +11,7 @@ def load_models():
         dict: loaded models
     """
     models = {
-        "knn": pickle.load(open("./model_weights/clf.bin", 'rb'))
+        "knn": pickle.load(open("../model_weights/clf.bin", 'rb'))
     }
     print("Models loaded from disk")
     return models

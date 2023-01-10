@@ -8,18 +8,18 @@ from sklearn.decomposition import PCA
 from skimage.feature import graycomatrix, graycoprops
 # stratified k-folds
 from sklearn.model_selection import train_test_split, StratifiedKFold
-from skmultilearn.model_selection.iterative_stratification import IterativeStratification
+# from skmultilearn.model_selection.iterative_stratification import IterativeStratification
 import matplotlib.pyplot as plt
 
-import torch
-from torchvision import transforms
-from PIL import Image
-import cv2
+# import torch
+# from torchvision import transforms
+# from PIL import Image
+# import cv2
 
 import argparse
 import os
 import copy
-from tqdm import tqdm
+# from tqdm import tqdm
 
 import time
 import math
@@ -27,33 +27,35 @@ import csv
 
 from img_utils import remove_collinear_features, high_corr_label, Image_Funcs
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Config')
-    
+
     parser.add_argument('--root', type=str, default='./data/widsfixed/', help='Directory where files are.')
     parser.add_argument('--seed', type=int, default=0, help='Seed for random numbers.')
-    
+
     # Data config
     parser.add_argument('--dataset_split', type=str, default='70,20,10', help='Percentage of dataset allocated to each set (train,val,test).')
     parser.add_argument('--rgb_imgs', type=str, default='True', help='If true, assume RGB images - else, assume gray images (TBA).')
     parser.add_argument('--glcm_only', type=str, default='True', help='If true, use only GLCM features.')
-    
+
     # EDA
     parser.add_argument('--eda_rdm_img', type=str, default='True', help='If true, show random images (EDA).')
     parser.add_argument('--eda_rdm_img_num', type=int, default=5, help='Number of random images to show.')
-    
+
     parser.add_argument('--eda_mean_img', type=str, default='True', help='If true, show class mean image (EDA).')
     parser.add_argument('--mean_img_counter', type=int, default=20, help='Number of imgs to use to calculate class mean.')
-    
+
     parser.add_argument('--eda_eigen_img', type=str, default='True', help='If true, show eigen images (EDA).')
     parser.add_argument('--eigen_resize_factor', type=int, default=2, help='Resize factor for images used in eigen faces.')
     parser.add_argument('--eigen_img_counter', type=int, default=150, help='Number of imgs to use for eigen faces.')
-    
+
     parser.add_argument('--eda_metrics_distr', type=str, default='True', help='If true, calculate distribution of features.')
     parser.add_argument('--stats_len', type=int, default=150, help='Resize factor for images used in eigen faces.')
-    
+
     args = parser.parse_args()
     return args
+
 
 # TO-DO: Create parent class that contains aug functions for EDA
 class DS_aux(Image_Funcs):
@@ -67,16 +69,16 @@ class DS_aux(Image_Funcs):
                  ):
         super().__init__(args, label_code)
         self.data_split()
-    
+
     def data_split(self):
-        
+
         print("Calculating split fractions...")
         # get split fractions
         split_vals = self.args.dataset_split.split(",")
         trainset_fraction = int(split_vals[0])/100.
         valset_fraction = int(split_vals[1])/100.
         testset_fraction = int(split_vals[2])/100.
-                
+   
         # cross-validation
         self.num_folds = int((trainset_fraction+valset_fraction)/valset_fraction)
         self.folds = {}
@@ -96,41 +98,41 @@ class DS_aux(Image_Funcs):
         imgs = np.array(labels_df['image'])
         labels = np.array(labels_df['label'])
         imgs, labels = shuffle(imgs, labels, random_state=self.args.seed)
-        
+
         imgs_train_val, self.imgs_test, labels_train_val,\
         self.test_labels = train_test_split(imgs, labels, test_size=testset_fraction,
                                             random_state=self.args.seed, stratify=labels)
-        
+
         valset_fraction = round(valset_fraction/(1-testset_fraction),2) # adapted after testset removal
-        
+
         skf = StratifiedKFold(n_splits=self.num_folds)
-        
+
         for i, (train_indexes, val_indexes) in enumerate(skf.split(imgs_train_val, labels_train_val)):
             self.folds["fold_"+str(i+1)] = {'train':imgs_train_val[train_indexes],
                                             'val':imgs_train_val[val_indexes],
                                             'train_labels':labels_train_val[train_indexes],
                                             'val_labels':labels_train_val[val_indexes]}
-        
-    ### exploratory data analysis
+
+    # exploratory data analysis
     def show_rdm_imgs(self):
-        
+
         def plot_img(num_imgs,i,img,counter,text):
             plt.subplot(3,num_imgs,i, xticks = [], yticks = [])
             plt.imshow(img)
             plt.title(f"{text} {counter}")
-            
+
         num_imgs = self.args.eda_rdm_img_num
-        
+
         train_imgs = np.random.choice(self.folds['fold_1']['train'],num_imgs,replace=False)
         val_imgs = np.random.choice(self.folds['fold_1']['val'],num_imgs,replace=False)
         test_imgs = np.random.choice(self.imgs_test,num_imgs,replace=False)
-        
+
         train_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in train_imgs]
         val_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in val_imgs]
         test_imgs_file = [os.path.join(self.imgs_dir,img_file) for img_file in test_imgs]
-        
+
         plt.figure(figsize = (8,6))
-        
+
         for i in range(1,(num_imgs*3)+1):
             if i <= num_imgs:
                 img = plt.imread(train_imgs_file[i-1])

@@ -145,7 +145,7 @@ def main(args):
     ax.legend( (errplot_1[0], errplot_2[0], errplot_3[0]), ('Balanced Accuracy', 'AUC', 'F1-Score') )
     plt.grid(color = 'gray', linestyle = '--', linewidth = 0.5)
 
-    plt.savefig("classifier_metrics.png",dpi=200)
+    plt.savefig("./plots/classifier_metrics.png",dpi=200)
     
 if __name__ == "__main__":
     args = parse_args()

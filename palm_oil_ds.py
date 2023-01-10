@@ -23,6 +23,9 @@ class PalmOilDataset(DS_aux):
                 's_correlation': self.get_glcm_metrics,
                 's_contrast'   : self.get_glcm_metrics
             }
+        
+        # Number of features available
+        self.n_feats = len(self.stats_calc.keys())
     
     def norm_features(self, train_set, val_set=[]):
         for i in range(self.train[0].shape[0]): #number of features
@@ -40,9 +43,9 @@ class PalmOilDataset(DS_aux):
             return train_set, val_set
         else:
             return train_set
-           
+    
     def calculate_features(self, img):
-        features = np.zeros((8))
+        features = np.zeros((self.n_feats))
         
         img_hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
         
@@ -75,8 +78,8 @@ class PalmOilDataset(DS_aux):
     def generate_features(self, fold, gen_full_data = False):
         fold_info = self.folds[fold]
         
-        init_train_feats = np.zeros((len(fold_info['train']),8)) # 8 features were chosen
-        init_val_feats = np.zeros((len(fold_info['val']),8))
+        init_train_feats = np.zeros((len(fold_info['train']),self.n_feats))
+        init_val_feats = np.zeros((len(fold_info['val']),self.n_feats))
 
         print(f"Calculating train set features for {fold}")
         init_train_feats = self.calc_set_feats(fold_info['train'], init_train_feats)
@@ -92,13 +95,13 @@ class PalmOilDataset(DS_aux):
         if gen_full_data:
             self.full_data = np.concatenate((self.train,self.val),axis=0)
             self.full_data = self.norm_features(self.full_data)
-            self.full_data_labels = np.concatenate((self.train_labels,self.val_labels),axis=0)
+            self.full_data_labels = np.concatenate((self.train_labels, self.val_labels),axis=0)
             
         self.train, self.val = self.norm_features(self.train, self.val)
 
     def gen_test_set(self):
         
-        init_test_feats = np.zeros((len(self.imgs_test),8)) #labels: self.test_labels
+        init_test_feats = np.zeros((len(self.imgs_test), self.n_feats)) #labels: self.test_labels
         init_test_feats = self.calc_set_feats(self.imgs_test, init_test_feats)
         self.test = init_test_feats
         self.test = self.norm_features(self.test)

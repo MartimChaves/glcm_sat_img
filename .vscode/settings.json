@@ -1,7 +1,9 @@
 {
-    "python.pythonPath": "env/bin/python3.8",
+    "python.defaultInterpreterPath": "env/bin/python3.8",
     "python.linting.pylintArgs": [
         "--errors-only",
         "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"
-        ]
+        ],
+        "python.linting.flake8Enabled": true,
+        "python.linting.enabled": false
 }
