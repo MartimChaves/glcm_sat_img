@@ -36,6 +36,7 @@ def main(args):
                    'cv':dataset.num_folds,
                    'refit':True}
     
+    # Grid search already carries out cross validation
     grid_clf = GridSearchCV(clf, parameters, **grid_kwargs)
     grid_clf.fit(dataset.full_data, dataset.full_data_labels)
     
@@ -65,6 +66,13 @@ def main(args):
     pred_test_labels = grid_clf.predict(dataset.test)
     raw_probs = grid_clf.predict_proba(dataset.test)[:, 1]
     
+    # Save to a .csv names of test images, their labels and predictions
+    data = {'img_names': dataset.imgs_test,
+            'labels': dataset.test_labels,
+            'predictions': pred_test_labels}
+    testimgs_data_df = pd.DataFrame(data)
+    testimgs_data_df.to_csv("./fastapi_app/testimgs.csv")
+
     auc = round(roc_auc_score(dataset.test_labels, raw_probs)*100,2)
     fpr, tpr, _ = roc_curve(dataset.test_labels, raw_probs)
     

@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import cv2
 import os
 from matplotlib import pyplot as plt
@@ -27,10 +28,27 @@ class PalmOilDataset(DS_aux):
         # Number of features available
         self.n_feats = len(self.stats_calc.keys())
     
-    def norm_features(self, train_set, val_set=[]):
+    def norm_features(self, train_set, val_set=[],
+                      logstats=False, testset=False):
+
+        if logstats:
+            stats_df = pd.DataFrame(-1, index=range(self.n_feats),
+                                    columns=["mean", "std"])
+
+        if testset:
+            read_stats_df = pd.read_csv("./fastapi_app/norm_stats.csv")
+
         for i in range(self.train[0].shape[0]): #number of features
-            feat_mean = np.mean(train_set[...,i])
-            feat_std = np.std(train_set[...,i])
+            if not testset:
+                feat_mean = np.mean(train_set[...,i])
+                feat_std = np.std(train_set[...,i])
+
+                if logstats:
+                    stats_df.at[i, "mean"] = feat_mean
+                    stats_df.at[i, "std"] = feat_std
+            else:
+                feat_mean = read_stats_df["mean"][i]
+                feat_std = read_stats_df["std"][i]
             
             train_set[...,i] = train_set[...,i] - feat_mean
             train_set[...,i] = train_set[...,i] / feat_std
@@ -39,6 +57,10 @@ class PalmOilDataset(DS_aux):
                 val_set[...,i] = val_set[...,i] - feat_mean
                 val_set[...,i] = val_set[...,i] / feat_std
         
+        # Save stats
+        if logstats:
+            stats_df.to_csv("./fastapi_app/norm_stats.csv")
+
         if not len(val_set) == 0:
             return train_set, val_set
         else:
@@ -94,9 +116,9 @@ class PalmOilDataset(DS_aux):
         
         if gen_full_data:
             self.full_data = np.concatenate((self.train,self.val),axis=0)
-            self.full_data = self.norm_features(self.full_data)
+            self.full_data = self.norm_features(self.full_data, logstats=True)
             self.full_data_labels = np.concatenate((self.train_labels, self.val_labels),axis=0)
-            
+        
         self.train, self.val = self.norm_features(self.train, self.val)
 
     def gen_test_set(self):
@@ -104,7 +126,7 @@ class PalmOilDataset(DS_aux):
         init_test_feats = np.zeros((len(self.imgs_test), self.n_feats)) #labels: self.test_labels
         init_test_feats = self.calc_set_feats(self.imgs_test, init_test_feats)
         self.test = init_test_feats
-        self.test = self.norm_features(self.test)
+        self.test = self.norm_features(self.test, testset=True)
         
     def calc_clss_weights(self):
         weight_dict = {}
