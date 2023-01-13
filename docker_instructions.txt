@@ -1,0 +1,4 @@
+docker build -t oil-palm-inference .
+docker run -p 8000:8000 oil-palm-inference
+
+When you eb init, it will ask for your aws access key and secret access key.

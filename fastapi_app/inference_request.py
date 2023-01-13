@@ -1,18 +1,19 @@
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 import requests
 
 url = "http://localhost:8000/predict"
 
-# Read the image file into memory
-image_data = open("img_00000.jpg", "rb").read()
+def make_request(img_name="no_oilpalm_class_0.jpg"):
+    print(f"POST request for a {img_name}:")
+    image = open(f"imgs/{img_name}", "rb")
 
-# Set the Content-Type header to "multipart/form-data"
-headers = {"Content-Type": "multipart/form-data"}
+    # MultipartEncoder takes care of the boundary string (automatically generates it)
+    # The boundary string is required for the server to be able to parse the different parts of the request
+    encoder = MultipartEncoder(fields={'file': (f'imgs/{img_name}', image, 'image/jpeg')})
+    response = requests.post(url, data=encoder, headers={'Content-Type': encoder.content_type})
 
-# Create the POST data
-data = {"image": ("img_00000.jpg", image_data)}
+    print(response.json())
 
-# Make the request
-response = requests.post(url, headers=headers, data=data)
+make_request()
+make_request(img_name="with_oilpalm_class_1.jpg")
 
-# Print the response
-print(response.text)
