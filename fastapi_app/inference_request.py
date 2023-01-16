@@ -1,7 +1,14 @@
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 import requests
 
-url = "http://localhost:8000/predict"
+eb_service = True
+
+if eb_service:
+    host = "oil-palm-serving-env.eba-nq2vvvmx.eu-west-1.elasticbeanstalk.com"
+else:
+    host = "localhost:8000"
+
+url = f"http://{host}/predict"
 
 def make_request(img_name="no_oilpalm_class_0.jpg"):
     print(f"POST request for a {img_name}:")
