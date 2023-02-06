@@ -45,8 +45,8 @@ class ImageFeatures(Image_Funcs):
         
         return features
     
-    def norm_features(self, features):
-        norm_stats_df = pd.read_csv("norm_stats.csv")
+    def norm_features(self, features, stats_csv="norm_stats.csv"):
+        norm_stats_df = pd.read_csv(stats_csv)
         
         mean_arr = np.array(norm_stats_df["mean"])
         std_arr = np.array(norm_stats_df["std"])

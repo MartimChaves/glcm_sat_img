@@ -4,10 +4,15 @@ This project came about when I was writing a blogpost on Gray Level Co-variance 
 
 The majority of the code here is dedicated to **extracting features from a dataset** and using them to **predict their class** using a **classifier**. That dataset is the one provided by the Women in Data Science (WiDS) Datathon 2019, which can be found [here](https://www.kaggle.com/c/widsdatathon2019/data).
 
+Then, in the /fastapi_app directory, you can find the FastAPI API developed, in the inference.py file.
+
 The *overall pipeline* is the following:
 1. Exploratory Data Analysis using *features_palm_oil.py*
 2. Testing different classifiers using *test_classifiers.py*
 3. Grid search the best hyper-parameters for the best classifier and get test set results using *train.py*
+4. Use the model to build an API
+5. Containerize the model using Docker
+6. Deploy the API to the cloud
 
 You can find some of the **results**, **graphs**, and other info in the **plots folder**. The results weren't *mind-blowing*, but still, I thought they were *reasonable*! And ultimately, it was quite a fun project. For the future I was thinking of deploying this model in a web app, which is something that I'd like to learn. *If you'd like to contribute, feel free to shoot me a message, I'd love to collaborate with different people on this project :)*
 
@@ -140,6 +145,41 @@ To train a classifier, run the *train.py* file:
 Currently, the **only classifier implemented is the KNN**. This python script will start by running a grid search for the hyper-parameters of the KNN, and afterward the best hyper-parameter configuration will be saved, according to the best F1-score, and used on the testset. A plot of the ROC and a confusion matrix with the testset results will be saved.
 
 There's a lot of future work for this file. For example, it would be great to implement an option to chose different classifiers and which hyper-parameters to use for the grid search.
+
+### 6. Test FastAPI API
+
+To test the FastAPI API, change the directory to /fastapi_app and run:
+
+> uvicorn inference:app --reload
+
+### 7. Test API with Docker
+
+To test API with Docker, you'll have to build the image and then run it.
+Command to build image:
+
+> docker build -t oil-palm-inference .
+
+Command to run it:
+
+> docker run -p 8000:8000 oil-palm-inference
+
+### 8. Deploy API to the Cloud
+
+To deploy the API to AWS using Elastic Beanstalk (EB), follow these steps:
+
+1. Initialize an EB environment
+
+> eb init -p docker -r eu-west-1 oil-palm-serving
+
+2. Create an EB environment
+
+> eb create oil-palm-serving-env
+
+The URL that shows up in the terminal after the line "INFO Application available at ..." is the URL where the application will be available.
+
+3. Terminate the EB environment when you're done
+
+> eb terminate oil-palm-serving-env
 
 ## Using the Project for Different Datasets
 

@@ -1,8 +1,7 @@
-from fastapi import FastAPI, File, UploadFile, Request
+from fastapi import FastAPI, UploadFile, Request
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from PIL import Image
-from io import BytesIO
 
 import numpy as np
 import pickle
@@ -28,18 +27,11 @@ def get_prediction(feats, clf):
                    'features': feats}
     return return_dict
 
-def read_imagefile(file) -> Image.Image:
-    image = Image.open(BytesIO(file))
-    return image
-
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-
-    # Read image
-    image = read_imagefile(await file.read())
-    
-    # Convert the image to a NumPy array
-    image_array = np.array(image)
+def predict(file: UploadFile):
+    # Read Image
+    img = Image.open(file.file)
+    image_array = np.array(img)
     
     # Get Features
     img_features = ImageFeatures()
