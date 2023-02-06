@@ -193,6 +193,7 @@ If you have any question, feel free to ask at: mgrc99@gmail.com
 
 If this helped you in any way, consider liking my medium posts:
 [On GLCMs](https://medium.com/@mgrc99/glcms-a-great-tool-for-your-ml-arsenal-7a59f1e45b65)
+
 [On FastAPI & Model Deployment](https://medium.com/@mgrc99/how-to-deploy-a-fast-and-scalable-image-classification-web-app-538b1f43fb22#1826)
 
 Thank you!
